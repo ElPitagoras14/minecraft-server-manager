@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "nodemon -r ts-node src/index.ts",
     "start": "node dist/index.js",
     "build": "tsup src/index.ts --minify"
   },
@@ -12,13 +12,17 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/websocket": "^1.0.10",
     "axios": "^1.7.9",
     "discord.js": "^14.17.3",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "websocket": "^1.0.35",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
     "tsup": "^8.3.5",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }

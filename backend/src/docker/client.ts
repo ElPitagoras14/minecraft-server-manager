@@ -2,45 +2,12 @@ import Docker from "dockerode";
 import { dockerConfig } from "./config";
 import { logger } from "../log";
 
-const dockerApiUrl = dockerConfig.dockerUrl;
+const { dockerUrl } = dockerConfig;
 
-const docker = new Docker({ protocol: "http", host: dockerApiUrl, port: 2375 });
+const docker = new Docker({ protocol: "http", host: dockerUrl, port: 2375 });
 
-const checkRCONInLogs = async (containerId: string): Promise<boolean> => {
-  try {
-    const container = docker.getContainer(containerId);
-
-    const logs = await container.logs({
-      stdout: true,
-      stderr: true,
-      tail: 100,
-    });
-
-    const logMessage = logs.toString();
-
-    if (logMessage.includes("RCON running on 0.0.0.0:25575")) {
-      logger.info("RCON ya está disponible en los logs", {
-        filename: "client.ts",
-        func: "checkRCONInLogs",
-      });
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    logger.error(
-      `Error al obtener los logs del contenedor ${containerId}: ${error}`,
-      {
-        filename: "client.ts",
-        func: "checkRCONInLogs",
-      }
-    );
-    throw error;
-  }
-};
-
-const pullImage = (imageName: string, logger: any): Promise<void> => {
-  logger.info(`Descargando imagen ${imageName}`, {
+const pullImage = async (imageName: string, logger: any): Promise<void> => {
+  logger.info(`Downloading image ${imageName}`, {
     filename: "client.ts",
     func: "pullImage",
   });
@@ -68,23 +35,20 @@ const pullImage = (imageName: string, logger: any): Promise<void> => {
   });
 };
 
-export const waitForRCON = async (containerId: string) => {
+export const waitForRCON = async (
+  containerId: string,
+  date: number = Date.now()
+) => {
   try {
     const container = docker.getContainer(containerId);
 
-    const rconFound = await checkRCONInLogs(containerId);
-    if (rconFound) {
-      logger.info("Servidor Minecraft listo", {
-        filename: "client.ts",
-        func: "waitForRCON",
-      });
-      return;
-    }
+    const startTime = Math.floor(date / 1000);
 
     const logStream = await container.logs({
       follow: true,
       stdout: true,
       stderr: true,
+      since: startTime,
     });
 
     let timeoutId: NodeJS.Timeout;
@@ -96,7 +60,7 @@ export const waitForRCON = async (containerId: string) => {
         }
 
         timeoutId = setTimeout(() => {
-          reject(new Error("Timeout alcanzado sin encontrar RCON en los logs"));
+          reject(new Error("Timeout waiting for RCON"));
         }, 1000 * 90);
       };
 
@@ -105,7 +69,7 @@ export const waitForRCON = async (containerId: string) => {
       logStream.on("data", (data: Buffer) => {
         const logMessage = data.toString();
         if (logMessage.includes("RCON running on 0.0.0.0:25575")) {
-          logger.info("Servidor Minecraft listo y RCON disponible", {
+          logger.info("Minecraft Server is ready", {
             filename: "client.ts",
             func: "waitForRCON",
           });
@@ -116,7 +80,7 @@ export const waitForRCON = async (containerId: string) => {
       });
 
       logStream.on("error", (error: Error) => {
-        logger.error(`Error al obtener logs del contenedor: ${error}`, {
+        logger.error(`Error getting logs from container: ${error}`, {
           filename: "client.ts",
           func: "waitForRCON",
         });
@@ -139,21 +103,18 @@ export const waitForRCON = async (containerId: string) => {
 
 export const startContainer = async (containerId: string) => {
   try {
-    logger.info(`Iniciando contenedor ${containerId.slice(0, 12)}`, {
+    logger.info(`Starting container ${containerId}`, {
       filename: "client.ts",
       func: "startContainer",
     });
     const container = docker.getContainer(containerId);
     await container.start();
-    logger.info(
-      `Contenedor ${containerId.slice(0, 12)} iniciado correctamente`,
-      {
-        filename: "client.ts",
-        func: "startContainer",
-      }
-    );
+    logger.info(`Container ${containerId} initialized correctly`, {
+      filename: "client.ts",
+      func: "startContainer",
+    });
   } catch (error) {
-    logger.error(`Error al iniciar el contenedor: ${error}`, {
+    logger.error(`Error initializing container ${containerId}: ${error}`, {
       filename: "client.ts",
       func: "startContainer",
     });
@@ -164,18 +125,18 @@ export const stopContainer = async (containerId: string) => {
   try {
     const container = docker.getContainer(containerId);
     await container.stop();
-    logger.info(
-      `Contenedor Minecraft ${containerId.slice(0, 12)} detenido correctamente`,
+    logger.info(`Minecraft container ${containerId} stopped correctly`, {
+      filename: "client.ts",
+      func: "stopMinecraftServer",
+    });
+  } catch (error) {
+    logger.error(
+      `Error stopping Minecraft container ${containerId}: ${error}`,
       {
         filename: "client.ts",
         func: "stopMinecraftServer",
       }
     );
-  } catch (error) {
-    logger.error(`Error al detener el servidor de Minecraft: ${error}`, {
-      filename: "client.ts",
-      func: "stopMinecraftServer",
-    });
   }
 };
 
@@ -184,17 +145,14 @@ export const restartContainer = async (containerId: string) => {
     const container = docker.getContainer(containerId);
     await container.restart();
     logger.info(
-      `Servidor de Minecraft ${containerId.slice(
-        0,
-        12
-      )} reiniciado correctamente.`,
+      `Minecraft server ${containerId} restarted correctly.`,
       {
         filename: "client.ts",
         func: "restartMinecraftServer",
       }
     );
   } catch (error) {
-    logger.error(`Error al reiniciar el servidor de Minecraft: ${error}`, {
+    logger.error(`Error restarting Minecraft container ${containerId}: ${error}`, {
       filename: "client.ts",
       func: "restartMinecraftServer",
     });
@@ -206,11 +164,11 @@ export const createContainer = async (
   newPort: string,
   serverProperties: any
 ) => {
-  const { motd, maxPlayers, difficulty, levelName } = serverProperties;
+  const { motd, maxPlayers, difficulty, worldName } = serverProperties;
   try {
-    logger.info("Creando contenedor Minecraft", {
+    logger.info("Creating Minecraft container", {
       filename: "client.ts",
-      func: "createMinecraftServer",
+      func: "createContainer",
     });
 
     const images = await docker.listImages();
@@ -224,7 +182,7 @@ export const createContainer = async (
 
     const containerOptions = {
       Image: "itzg/minecraft-server",
-      name: "minecraft-server",
+      name: `minecraft-${newPort}`,
       Tty: true,
       Env: [
         "EULA=TRUE",
@@ -235,34 +193,34 @@ export const createContainer = async (
         `MOTD=${motd}`,
         `MAX_PLAYERS=${maxPlayers}`,
         `DIFFICULTY=${difficulty}`,
-        `LEVEL=${levelName}`,
+        `LEVEL=${worldName}`,
       ],
       ExposedPorts: {
         "25565/tcp": {},
       },
       HostConfig: {
         PortBindings: {
-          "25565/tcp": [{ HostPort: newPort }],
+          "25565/tcp": [{ HostPort: `${newPort}` }],
         },
       },
     };
 
     const container = await docker.createContainer(containerOptions);
-    const containerId = container.id;
+    const containerId = container.id.slice(0, 12);
 
-    logger.info(
-      `Contenedor Minecraft creado con ID: ${containerId.slice(0, 12)}`,
-      {
-        filename: "client.ts",
-        func: "createMinecraftServer",
-      }
-    );
+    logger.info(`Minecraft container created with id: ${containerId}`, {
+      filename: "client.ts",
+      func: "createContainer",
+    });
 
     return containerId;
   } catch (error) {
-    logger.error(`Error al crear el contenedor Minecraft: ${error}`, {
+    logger.error(`Error while creating Minecraft container`, {
       filename: "client.ts",
-      func: "createMinecraftServer",
+      func: "createContainer",
+      extra: {
+        error,
+      },
     });
     throw error;
   }
@@ -275,7 +233,7 @@ export const checkStatusContainer = async (containerId: string) => {
     const { State } = data;
     return State;
   } catch (error) {
-    logger.error(`Error al obtener el estado del contenedor: ${error}`, {
+    logger.error(`Error getting the container status: ${error}`, {
       filename: "client.ts",
       func: "checkStatusContainer",
     });

@@ -1,10 +1,32 @@
 import { Request, Response } from "express";
-import { encryptPassword, getRandomWord } from "./utils";
 import { executeQuery, serverManagerPool } from "../../databases/clients";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../../log";
+import { encryptPassword, getRandomWord } from "../auth/utils";
 
-export const createUser = async (req: Request, res: Response) => {
+export const getUserByUsername = async (username: string) => {
+  const sql = `
+    SELECT
+      id,
+      username,
+      email,
+      password,
+      is_admin as isAdmin,
+      status
+    FROM users
+    WHERE username = ?
+  `;
+  const { result } = await executeQuery(sql, [username], serverManagerPool);
+
+  if (result.length === 0) {
+    return null;
+  }
+
+  const [user] = result;
+  return user;
+};
+
+export const createUserController = async (req: Request, res: Response) => {
   const requestId = uuidv4();
   const childLogger = logger.child({
     extra: { requestId },
@@ -14,7 +36,7 @@ export const createUser = async (req: Request, res: Response) => {
       body: { id, username, email },
     } = req;
 
-    childLogger.info("Creando usuario", {
+    childLogger.info("Creating user", {
       filename: "service.ts",
       func: "createUser",
     });
@@ -28,7 +50,7 @@ export const createUser = async (req: Request, res: Response) => {
     const values = [id, username, email, password];
     const result = await executeQuery(sql, values, serverManagerPool);
 
-    childLogger.info(`Usuario ${username} creado correctamente`, {
+    childLogger.info(`User ${username} created correctly`, {
       filename: "service.ts",
       func: "createUser",
     });
@@ -36,7 +58,7 @@ export const createUser = async (req: Request, res: Response) => {
     const response = {
       requestId,
       statusCode: 201,
-      message: "Usuario creado correctamente",
+      message: "User created correctly",
       payload: {
         id,
         username,
@@ -46,15 +68,17 @@ export const createUser = async (req: Request, res: Response) => {
 
     res.status(201).json(response);
   } catch (error: any) {
-    childLogger.error("Error al crear usuario", {
+    childLogger.error("Error creating user", {
       filename: "service.ts",
       func: "createUser",
-      error: error.message,
+      extra: {
+        error: error.message,
+      }
     });
     const response = {
       requestId,
       statusCode: 500,
-      message: "Error al crear usuario",
+      message: "Error creating user",
       payload: {
         error: error.message,
       },

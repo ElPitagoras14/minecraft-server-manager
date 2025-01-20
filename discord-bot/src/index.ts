@@ -1,34 +1,37 @@
-import { Client } from "discord.js";
+import { Client, Events } from "discord.js";
 import { deployCommands } from "./deploy-commands";
-import { commands } from "./commands";
 import { generalConfig } from "./config";
+import { logger } from "./log";
+import { handleCommandInput } from "./handle-types/handle-command";
+import { handleModalInput } from "./handle-types/handle-modal";
+import { initWebSocketConnection } from "./web-socket";
+import { getAuthToken } from "./utils";
+
+export let authToken: string;
+
+(async () => {
+  authToken = await getAuthToken();
+})();
+
+initWebSocketConnection();
 
 const client = new Client({
   intents: ["Guilds", "GuildMessages", "DirectMessages"],
 });
 
-client.once("ready", async () => {
+client.once(Events.ClientReady, async (readyClient) => {
   await deployCommands();
-  console.log("Discord bot is ready! 🤖");
+  logger.info(`Ready! Logged in as ${readyClient.user.tag}`, {
+    filename: "index.ts",
+    func: "client.once",
+  });
 });
 
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isCommand()) {
-    return;
-  }
-  console.log(interaction.commandName);
-  const { commandName } = interaction;
-  if (commands[commandName as keyof typeof commands]) {
-    const command = commands[commandName as keyof typeof commands];
-    try {
-      await command.execute(interaction);
-    } catch (error) {
-      console.error(error);
-      await interaction.reply({
-        content: "There was an error while executing this command!",
-        ephemeral: true,
-      });
-    }
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isChatInputCommand()) {
+    return handleCommandInput(interaction);
+  } else if (interaction.isModalSubmit()) {
+    return handleModalInput(interaction);
   }
 });
 

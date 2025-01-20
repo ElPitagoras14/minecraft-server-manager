@@ -1,5 +1,6 @@
 import { Job, Queue } from "bull";
 import { initializeServerQueue } from "./server-queue";
+import { logger } from "../log";
 
 type TaskStatus = {
   ticketId: string;
@@ -63,7 +64,14 @@ export const getTaskStatus = async (
 
     return taskStatus;
   } catch (error) {
-    console.error("Error getting task status:", error);
+    logger.error("Failed to get task status", {
+      filename: "task-queue-service.ts",
+      func: "getTaskStatus",
+      extra: {
+        ticketId,
+        queueName,
+      },
+    });
     throw new Error("Failed to get task status");
   }
 };

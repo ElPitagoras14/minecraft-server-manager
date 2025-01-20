@@ -11,5 +11,6 @@ export async function execute(interaction: CommandInteraction) {
   const roles = interaction.guild?.members.cache
     .get(id)
     ?.roles.cache.map((role) => role.name);
-  return interaction.reply(`${id} - ${username} - ${roles}`);
+  await interaction.reply(`${id} - ${username} - ${roles}`);
+  await interaction.editReply("Pong!");
 }

@@ -12,7 +12,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/dockerode": "^3.3.34",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/websocket": "^1.0.10",
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "bull": "^4.16.5",
@@ -20,8 +23,10 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "ioredis": "^5.4.2",
+    "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.12.0",
     "uuid": "^11.0.5",
+    "websocket": "^1.0.35",
     "winston": "^3.17.0"
   },
   "devDependencies": {

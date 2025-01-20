@@ -2,6 +2,8 @@ import { startContainer, waitForRCON } from "../docker/client";
 import Queue from "bull";
 import redisClient from "../databases/redis-client";
 import { logger } from "../log";
+import { executeQuery, serverManagerPool } from "../databases/clients";
+import { requestMap } from "../web-socket";
 
 const initializeServerQueue = new Queue("initialize-server-queue", {
   redis: { host: redisClient.options.host, port: redisClient.options.port },
@@ -30,7 +32,7 @@ initializeServerQueue.on("failed", (job, err) => {
 
 initializeServerQueue.process(async (job) => {
   try {
-    const { containerId, requestId } = job.data;
+    const { serverId, requestId, date } = job.data;
 
     logger.info(`Ejecutando job ${job.id}`, {
       filename: "task-queue-processor.ts",
@@ -38,14 +40,42 @@ initializeServerQueue.process(async (job) => {
       extra: { requestId },
     });
 
-    await startContainer(containerId);
-    await waitForRCON(containerId);
+    const initStatusSql = `
+      UPDATE servers
+      SET status = 'INITIALIZING'
+      WHERE id = ?;
+    `;
+    await executeQuery(initStatusSql, [serverId], serverManagerPool);
+
+    await startContainer(serverId);
+    await waitForRCON(serverId, date);
+
+    const connection = requestMap.get(`${job.id}`);
+    if (connection) {
+      connection.sendUTF(
+        JSON.stringify({
+          action: "checkServerIsReady",
+          serverId,
+        })
+      );
+      logger.info(`Server ${serverId} is ready`, {
+        filename: "web-socket.ts",
+        func: "connection.on",
+      });
+    }
 
     logger.info(`Job ${job.id} completado`, {
       filename: "task-queue-processor.ts",
       func: "initializeServerQueue.process",
       extra: { requestId },
     });
+
+    const readyStatusSql = `
+      UPDATE servers
+      SET status = 'READY'
+      WHERE id = ?;
+    `;
+    await executeQuery(readyStatusSql, [serverId], serverManagerPool);
 
     return "Servidor de Minecraft iniciado correctamente";
   } catch (error) {

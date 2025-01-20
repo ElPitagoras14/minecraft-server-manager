@@ -13,24 +13,21 @@ const {
 } = generalConfig;
 
 export const data = new SlashCommandBuilder()
-  .setName("checkserver")
-  .setDescription("Check the status of the server")
-  .addStringOption((option) =>
-    option
-      .setName("server-id")
-      .setDescription("The server ID")
-      .setRequired(true)
+  .setName("checkready")
+  .setDescription("Check if the server is ready")
+  .addIntegerOption((option) =>
+    option.setName("job-id").setDescription("The job ID").setRequired(true)
   );
 
 export async function execute(interaction: CommandInteraction) {
   try {
     logger.info("Checking server status", {
-      filename: "check-server.ts",
+      filename: "check-init.ts",
       func: "execute",
     });
-    const serverId = interaction.options.get("server-id")?.value;
+    const jobId = interaction.options.get("job-id")?.value;
     const checkStatusOptions = {
-      url: `http://${host}:${port}/server/info/${serverId}`,
+      url: `http://${host}:${port}/server/check-init/${jobId}`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -42,7 +39,9 @@ export async function execute(interaction: CommandInteraction) {
         payload: { status },
       },
     } = response;
-    return interaction.reply(`Status: ${status ? "Running" : "Stopped"}`);
+    return interaction.reply(
+      `Status: ${status === "in-progress" ? "In progress" : "Ready"}`
+    );
   } catch (error: any) {
     const { response: { data } = {} } = error;
     logger.error("Error fetching status:", {
