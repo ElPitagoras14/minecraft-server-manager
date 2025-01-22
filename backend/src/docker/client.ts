@@ -144,18 +144,18 @@ export const restartContainer = async (containerId: string) => {
   try {
     const container = docker.getContainer(containerId);
     await container.restart();
-    logger.info(
-      `Minecraft server ${containerId} restarted correctly.`,
+    logger.info(`Minecraft server ${containerId} restarted correctly.`, {
+      filename: "client.ts",
+      func: "restartMinecraftServer",
+    });
+  } catch (error) {
+    logger.error(
+      `Error restarting Minecraft container ${containerId}: ${error}`,
       {
         filename: "client.ts",
         func: "restartMinecraftServer",
       }
     );
-  } catch (error) {
-    logger.error(`Error restarting Minecraft container ${containerId}: ${error}`, {
-      filename: "client.ts",
-      func: "restartMinecraftServer",
-    });
   }
 };
 
@@ -223,6 +223,25 @@ export const createContainer = async (
       },
     });
     throw error;
+  }
+};
+
+export const deleteContainer = async (containerId: string) => {
+  try {
+    const container = docker.getContainer(containerId);
+    await container.remove();
+    logger.info(`Minecraft container ${containerId} deleted correctly`, {
+      filename: "client.ts",
+      func: "deleteContainer",
+    });
+  } catch (error) {
+    logger.error(
+      `Error deleting Minecraft container ${containerId}: ${error}`,
+      {
+        filename: "client.ts",
+        func: "deleteContainer",
+      }
+    );
   }
 };
 

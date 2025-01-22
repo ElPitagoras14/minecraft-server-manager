@@ -1,9 +1,12 @@
 import {
+  ActionRowBuilder,
   CommandInteraction,
   MessageFlags,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
 } from "discord.js";
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 import { logger } from "../log";
 import { generalConfig } from "../config";
 import { createTable } from "../utils";
@@ -42,6 +45,17 @@ export async function execute(interaction: CommandInteraction) {
       });
     }
 
+    const selectOptions = items.map((item: any) =>
+      new StringSelectMenuOptionBuilder().setLabel(item.name).setValue(item.id)
+    );
+    const select = new StringSelectMenuBuilder()
+      .setCustomId("server-info")
+      .setPlaceholder("Select a server to inspect")
+      .addOptions(selectOptions);
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      select
+    );
+
     const headers = ["ID", "World Name", "Version", "Port", "Status"];
     const rows = items.map((item: any) => [
       item.id,
@@ -52,15 +66,30 @@ export async function execute(interaction: CommandInteraction) {
     ]);
     const table = createTable(headers, rows);
 
-    return interaction.reply({
-      content: `\`\`\`${table}\`\`\``,
+    await interaction.reply({
+      content: `\`\`\`${table}\`\`\`\nSelect a server to inspect`,
+      components: [row],
       flags: MessageFlags.Ephemeral,
     });
   } catch (error: any) {
-    logger.error("Error fetching status:", {
-      filename: "check-init.ts",
-      func: "execute",
-      extra: error,
+    if (isAxiosError(error)) {
+      const { response: { data } = {} } = error;
+      logger.error("Error fetching status:", {
+        filename: "check-init.ts",
+        func: "execute",
+        extra: data,
+      });
+
+      if (data.statusCode !== 500) {
+        return interaction.reply({
+          content: data.message,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
+    await interaction.reply({
+      content: "There was an error while fetching the status.",
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

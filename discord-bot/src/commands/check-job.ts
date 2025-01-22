@@ -3,7 +3,7 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 import { logger } from "../log";
 import { generalConfig } from "../config";
 import { authToken } from "..";
@@ -13,7 +13,7 @@ const {
 } = generalConfig;
 
 export const data = new SlashCommandBuilder()
-  .setName("checkready")
+  .setName("checkjob")
   .setDescription("Check if the server is ready")
   .addIntegerOption((option) =>
     option.setName("job-id").setDescription("The job ID").setRequired(true)
@@ -43,18 +43,22 @@ export async function execute(interaction: CommandInteraction) {
       `Status: ${status === "in-progress" ? "In progress" : "Ready"}`
     );
   } catch (error: any) {
-    const { response: { data } = {} } = error;
-    logger.error("Error fetching status:", {
-      filename: "check-init.ts",
-      func: "execute",
-      extra: data,
-    });
+    if (isAxiosError(error)) {
+      const { response: { data } = {} } = error;
+      logger.error("Error fetching status:", {
+        filename: "check-init.ts",
+        func: "execute",
+        extra: data,
+      });
 
-    if (data.statusCode !== 500) {
-      return interaction.reply(data.message);
+      if (data.statusCode !== 500) {
+        return interaction.reply({
+          content: data.message,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
     }
-
-    return interaction.reply({
+    await interaction.reply({
       content: "There was an error while fetching the status.",
       flags: MessageFlags.Ephemeral,
     });

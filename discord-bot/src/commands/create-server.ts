@@ -8,6 +8,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { logger } from "../log";
+import { isAxiosError } from "axios";
 
 export const data = new SlashCommandBuilder()
   .setName("createserver")
@@ -56,13 +57,23 @@ export async function execute(interaction: CommandInteraction) {
 
     await interaction.showModal(modal);
   } catch (error: any) {
-    logger.error("Error fetching status:", {
-      filename: "check-init.ts",
-      func: "execute",
-      extra: error,
-    });
+    if (isAxiosError(error)) {
+      const { response: { data } = {} } = error;
+      logger.error("Error fetching status:", {
+        filename: "check-init.ts",
+        func: "execute",
+        extra: data,
+      });
+
+      if (data.statusCode !== 500) {
+        return interaction.reply({
+          content: data.message,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
     await interaction.reply({
-      content: "There was an error while creating the server.",
+      content: "There was an error while fetching the status.",
       flags: MessageFlags.Ephemeral,
     });
   }

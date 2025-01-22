@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import {
   checkStatusContainer,
-  createContainer,
   stopContainer,
+  createContainer,
+  deleteContainer,
 } from "../../docker/client";
 import { logger } from "../../log";
 import { v4 as uuidv4 } from "uuid";
@@ -22,13 +23,14 @@ export const getAllServersController = async (req: Request, res: Response) => {
 
     const sql = `
       SELECT
-        id,
-        name,
-        version,
-        port,
-        status
-      FROM servers
-      WHERE status != 'DELETED';
+        s.id,
+        s.name,
+        s.version,
+        s.port,
+        s.status
+      FROM servers s
+      WHERE s.status != 'DELETED'
+      ORDER BY s.created_at ASC;
     `;
     const { result } = await executeQuery(sql, [], serverManagerPool);
 
@@ -110,7 +112,7 @@ export const createServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 404,
-        message: "Usuario no encontrado.",
+        message: "No tienes permisos para crear un servidor.",
         payload: {
           requesterId,
         },
@@ -284,6 +286,202 @@ export const createServerController = async (req: Request, res: Response) => {
   }
 };
 
+export const getServerInfoController = async (req: Request, res: Response) => {
+  const requestId = uuidv4();
+  const childLogger = logger.child({
+    extra: { requestId },
+  });
+
+  try {
+    const {
+      params: { serverId },
+    } = req;
+    childLogger.info(`Obteniendo estado del servidor con ID: ${serverId}`, {
+      filename: "service.ts",
+      func: "getServerStatusController",
+    });
+
+    const infoSql = `
+      SELECT
+        s.id,
+        s.name,
+        s.version,
+        s.port,
+        s.status,
+        s.name,
+        u.username as creator,
+        u.id as creatorId,
+        s.role_name as roleName
+      FROM servers s
+      LEFT JOIN users u ON s.creator_id = u.id
+      WHERE s.id = ?;
+    `;
+    const { result: infoResult } = await executeQuery(
+      infoSql,
+      [serverId],
+      serverManagerPool
+    );
+    const [info] = infoResult;
+
+    const serverStatus = await checkStatusContainer(serverId);
+
+    const response = {
+      requestId,
+      statusCode: 200,
+      message: "Estado del servidor obtenido correctamente",
+      payload: {
+        status: serverStatus.Running,
+        ...info,
+      },
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    childLogger.error(`Error al obtener el estado del servidor: ${error}`, {
+      filename: "service.ts",
+      func: "getServerStatusController",
+    });
+
+    const response = {
+      requestId,
+      statusCode: 500,
+      message: "Error al obtener el estado del servidor",
+      payload: {
+        error,
+      },
+    };
+
+    res.status(500).json(response);
+  }
+};
+
+export const deleteServerController = async (req: Request, res: Response) => {
+  const requestId = uuidv4();
+  const childLogger = logger.child({
+    extra: { requestId },
+  });
+  let connection;
+
+  try {
+    connection = await serverManagerPool.getConnection();
+    connection.beginTransaction();
+    const {
+      params: { serverId },
+      body: { requesterId, requesterUser },
+    } = req;
+
+    const roleServerSql = `
+      SELECT
+        s.creator_id as creatorId
+      FROM servers s
+      WHERE id = ?;
+    `;
+    const { result: roleServerResult } = await executeQuery(
+      roleServerSql,
+      [serverId],
+      serverManagerPool
+    );
+    const [{ creatorId }] = roleServerResult;
+
+    if (requesterId !== creatorId) {
+      childLogger.info("Usuario no autorizado", {
+        filename: "service.ts",
+        func: "deleteServerController",
+      });
+
+      const response = {
+        requestId,
+        statusCode: 403,
+        message: "Solo el creador puede eliminar el mundo.",
+        payload: {},
+      };
+
+      const unauthorizedLogSql = `
+        INSERT INTO server_logs (request_id, server_id, username, action, status)
+        VALUES (?, ?, ?, ?, ?);
+      `;
+      connection.execute(unauthorizedLogSql, [
+        requestId,
+        serverId,
+        requesterUser,
+        "delete-server",
+        "FAILED",
+      ]);
+
+      connection.commit();
+      res.status(403).json(response);
+      return;
+    }
+
+    childLogger.info(`Eliminando servidor con ID: ${serverId}`, {
+      filename: "service.ts",
+      func: "deleteServerController",
+    });
+
+    await deleteContainer(serverId);
+
+    childLogger.info(`Servidor de Minecraft eliminado correctamente`, {
+      filename: "service.ts",
+      func: "deleteServerController",
+    });
+
+    const deleteSql = `
+      UPDATE servers
+      SET status = 'DELETED'
+      WHERE id = ?;
+    `;
+    await executeQuery(deleteSql, [serverId], serverManagerPool);
+
+    const logSql = `
+      INSERT INTO server_logs (request_id, server_id, username, action, status)
+      VALUES (?, ?, ?, ?, ?);
+    `;
+    connection.execute(logSql, [
+      requestId,
+      serverId,
+      requesterUser,
+      "delete-server",
+      "SUCCESS",
+    ]);
+
+    const response = {
+      requestId,
+      statusCode: 200,
+      message: "Servidor de Minecraft eliminado correctamente",
+      payload: {},
+    };
+
+    await connection.commit();
+    res.status(200).json(response);
+  } catch (error: any) {
+    childLogger.error(`Error al eliminar el servidor de Minecraft: ${error}`, {
+      filename: "service.ts",
+      func: "deleteServerController",
+    });
+
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+
+    const response = {
+      requestId,
+      statusCode: statusCode || 500,
+      message: message || "Error al eliminar el servidor de Minecraft",
+      payload: {
+        error: specificMessage,
+      },
+    };
+
+    if (connection) {
+      connection.rollback();
+    }
+
+    res.status(statusCode || 500).json(response);
+  }
+};
+
 export const startServerController = async (req: Request, res: Response) => {
   const requestId = uuidv4();
   const childLogger = logger.child({
@@ -354,7 +552,7 @@ export const startServerController = async (req: Request, res: Response) => {
       ? requesterRoles.some((role: string) => role === roleName)
       : false;
 
-    if (hasRole || requesterId !== creatorId) {
+    if (!hasRole && requesterId !== creatorId) {
       childLogger.info("Usuario no autorizado", {
         filename: "service.ts",
         func: "startServerController",
@@ -473,12 +671,12 @@ export const stopServerController = async (req: Request, res: Response) => {
 
     const roleServerSql = `
       SELECT
-        name,
-        status,
-        role_name as roleName,
-        creator_id as creatorId
-      FROM servers
-      WHERE id = ?;
+        s.name,
+        s.status,
+        s.role_name as roleName,
+        s.creator_id as creatorId
+      FROM servers s
+      WHERE s.id = ?;
     `;
     const { result: roleServerResult } = await executeQuery(
       roleServerSql,
@@ -490,7 +688,7 @@ export const stopServerController = async (req: Request, res: Response) => {
     if (status === "DOWN") {
       childLogger.info("Servidor en proceso de inicialización", {
         filename: "service.ts",
-        func: "startServerController",
+        func: "stopServerController",
       });
 
       const response = {
@@ -519,24 +717,26 @@ export const stopServerController = async (req: Request, res: Response) => {
 
     childLogger.info(`Rol del servidor ${roleName}`, {
       filename: "service.ts",
-      func: "startServerController",
+      func: "stopServerController",
     });
 
     const hasRole = roleName
       ? requesterRoles.some((role: string) => role === roleName)
       : false;
 
-    if (hasRole || requesterId !== creatorId) {
+    if (!hasRole && requesterId !== creatorId) {
       childLogger.info("Usuario no autorizado", {
         filename: "service.ts",
-        func: "startServerController",
+        func: "stopServerController",
       });
 
       const response = {
         requestId,
         statusCode: 403,
-        message: "Usuario no autorizado para iniciar el servidor.",
-        payload: {},
+        message: "Usuario no autorizado para detener el servidor.",
+        payload: {
+          wordlName: name,
+        },
       };
 
       const unauthorizedLogSql = `
@@ -629,71 +829,6 @@ export const stopServerController = async (req: Request, res: Response) => {
     }
 
     res.status(statusCode || 500).json(response);
-  }
-};
-
-export const getServerInfoController = async (req: Request, res: Response) => {
-  const requestId = uuidv4();
-  const childLogger = logger.child({
-    extra: { requestId },
-  });
-
-  try {
-    const {
-      params: { serverId },
-    } = req;
-    childLogger.info(`Obteniendo estado del servidor con ID: ${serverId}`, {
-      filename: "service.ts",
-      func: "getServerStatusController",
-    });
-
-    const infoSql = `
-      SELECT
-        name,
-        version,
-        port,
-        status,
-        creator_id as creatorId,
-        role_name as roleName
-      FROM servers
-      WHERE id = ?;
-    `;
-    const { result: infoResult } = await executeQuery(
-      infoSql,
-      [serverId],
-      serverManagerPool
-    );
-    const [info] = infoResult;
-
-    const serverStatus = await checkStatusContainer(serverId);
-
-    const response = {
-      requestId,
-      statusCode: 200,
-      message: "Estado del servidor obtenido correctamente",
-      payload: {
-        status: serverStatus.Running,
-        ...info,
-      },
-    };
-
-    res.status(200).json(response);
-  } catch (error) {
-    childLogger.error(`Error al obtener el estado del servidor: ${error}`, {
-      filename: "service.ts",
-      func: "getServerStatusController",
-    });
-
-    const response = {
-      requestId,
-      statusCode: 500,
-      message: "Error al obtener el estado del servidor",
-      payload: {
-        error,
-      },
-    };
-
-    res.status(500).json(response);
   }
 };
 

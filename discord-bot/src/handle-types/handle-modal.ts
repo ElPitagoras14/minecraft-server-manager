@@ -60,7 +60,10 @@ export const handleModalInput = async (
         });
 
         if (data.statusCode !== 500) {
-          return interaction.reply(data.message);
+          return interaction.reply({
+            content: data.message,
+            flags: MessageFlags.Ephemeral,
+          });
         }
       }
       return interaction.reply({

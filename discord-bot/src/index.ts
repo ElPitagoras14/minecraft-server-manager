@@ -6,6 +6,8 @@ import { handleCommandInput } from "./handle-types/handle-command";
 import { handleModalInput } from "./handle-types/handle-modal";
 import { initWebSocketConnection } from "./web-socket";
 import { getAuthToken } from "./utils";
+import { handleStringSelectInput } from "./handle-types/handle-select";
+import { handleButtonInput } from "./handle-types/handle-button";
 
 export let authToken: string;
 
@@ -32,6 +34,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return handleCommandInput(interaction);
   } else if (interaction.isModalSubmit()) {
     return handleModalInput(interaction);
+  } else if (interaction.isStringSelectMenu()) {
+    return handleStringSelectInput(interaction);
+  } else if (interaction.isButton()) {
+    return handleButtonInput(interaction);
   }
 });
 

@@ -7,6 +7,7 @@ import {
 import { generalConfig } from "./config";
 import { logger } from "./log";
 import {
+  ButtonInteraction,
   CacheType,
   CommandInteraction,
   MessageFlags,
@@ -20,7 +21,8 @@ const {
 interface RequestMapItem {
   interaction:
     | ModalSubmitInteraction<CacheType>
-    | CommandInteraction<CacheType>;
+    | CommandInteraction<CacheType>
+    | ButtonInteraction<CacheType>;
   worldName: string;
 }
 
@@ -92,7 +94,10 @@ export const checkServerIsReady = async (
   serverId: string,
   worldName: string,
   jobId: string,
-  interaction: ModalSubmitInteraction<CacheType> | CommandInteraction<CacheType>
+  interaction:
+    | ModalSubmitInteraction<CacheType>
+    | CommandInteraction<CacheType>
+    | ButtonInteraction<CacheType>
 ) => {
   logger.info("Checking server status", {
     filename: "web-socket.ts",
