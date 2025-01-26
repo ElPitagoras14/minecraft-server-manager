@@ -72,22 +72,27 @@ export const getAllServersController = async (req: Request, res: Response) => {
       WHERE
         s.status != 'DELETED'
         AND s.creator_id = ?
-      UNION
-      SELECT
-        s.id,
-        s.name,
-        s.version,
-        s.port,
-        s.status,
-        s.role_name as roleName
-      FROM servers s
-      WHERE
-        s.status != 'DELETED'
-        AND s.role_name IN (${rolesWithoutEmojis
-          .map((role) => `'${role}'`)
-          .join(", ")});
+      ${
+        rolesWithoutEmojis.length > 0
+          ? `
+            UNION
+              SELECT
+              s.id,
+              s.name,
+              s.version,
+              s.port,
+              s.status,
+              s.role_name as roleName
+            FROM servers s
+            WHERE
+              s.status != 'DELETED'
+              AND s.role_name IN (${rolesWithoutEmojis
+                .map((role) => `'${role}'`)
+                .join(", ")});
+              `
+          : ""
+      }
     `;
-    console.log(normalSql);
     const sql = isAdmin ? adminSql : normalSql;
     const values = isAdmin ? [] : [requesterId];
     const { result } = await executeQuery(sql, values, serverManagerPool);

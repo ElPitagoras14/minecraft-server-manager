@@ -91,7 +91,7 @@ export async function NavMain() {
             </Collapsible>
           );
         })}
-        {session.user.isAdmin &&
+        {session.user.isAdmin ? (
           adminItems.map((item) => {
             const { title, Icon, items } = item;
             return (
@@ -123,7 +123,10 @@ export async function NavMain() {
                 </SidebarMenuItem>
               </Collapsible>
             );
-          })}
+          })
+        ) : (
+          <></>
+        )}
       </SidebarMenu>
     </SidebarGroup>
   );
