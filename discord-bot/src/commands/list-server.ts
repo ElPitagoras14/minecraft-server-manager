@@ -26,19 +26,34 @@ export async function execute(interaction: CommandInteraction) {
       filename: "check-init.ts",
       func: "execute",
     });
-    const checkStatusOptions = {
+
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+    const roles = interaction.guild?.members.cache
+      .get(userId)
+      ?.roles.cache.map((role) => role.name);
+
+    const allServerOptions = {
       url: `http://${host}:${port}/server`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
+      params: {
+        requesterId: userId,
+        requesterRoles: roles,
+        requesterUser: username,
+      },
     };
-    const response = await axios.request(checkStatusOptions);
+    console.log(allServerOptions);
+    const response = await axios.request(allServerOptions);
     const {
-      data: { payload: items },
+      data: {
+        payload: { items = [], total = 0 },
+      },
     } = response;
 
-    if (!items.length) {
+    if (total === 0) {
       return interaction.reply({
         content: "No servers found",
         flags: MessageFlags.Ephemeral,

@@ -4,11 +4,28 @@ import {
   MessageFlags,
   ModalBuilder,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
 import { logger } from "../log";
-import { isAxiosError } from "axios";
+import axios, { isAxiosError } from "axios";
+
+const getVersions = async (): Promise<string[]> => {
+  const dataOptions = {
+    url: "https://mc-versions-api.net/api/java",
+    method: "GET",
+  };
+
+  const response = await axios.request(dataOptions);
+  console.log(response.data);
+  const {
+    data: { result },
+  } = response;
+
+  return result;
+};
 
 export const data = new SlashCommandBuilder()
   .setName("createserver")
@@ -31,6 +48,15 @@ export async function execute(interaction: CommandInteraction) {
       .setPlaceholder("Enter the world name")
       .setStyle(TextInputStyle.Short)
       .setRequired(true);
+
+    const versions = await getVersions();
+    const selectOptions = versions.map((version: any) =>
+      new StringSelectMenuOptionBuilder().setLabel(version).setValue(version)
+    );
+    const select = new StringSelectMenuBuilder()
+      .setCustomId("version")
+      .setPlaceholder("Select a version to create")
+      .addOptions(selectOptions);
 
     const versionInput = new TextInputBuilder()
       .setCustomId("version")

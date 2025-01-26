@@ -28,8 +28,7 @@ CREATE TABLE server_logs (
   username VARCHAR(255) NOT NULL,
   action VARCHAR(255) NOT NULL,
   status VARCHAR(255) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (server_id) REFERENCES servers(id)
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE backups (

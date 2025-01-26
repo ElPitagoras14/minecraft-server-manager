@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { authConfig } from "./config";
 
-const { secretKey: SECRET_KEY = "secret" } = authConfig;
+const { secretKey = "secret", maxAge = "3600" } = authConfig;
 const saltRounds = 10;
 
 export const encryptPassword = (plainPassword: string) =>
@@ -47,15 +47,15 @@ export const getRandomWord = (length: number) => {
 
 export const generateToken = (
   payload: object,
-  expiresIn: string = "1h"
+  expiresIn: string = `${parseInt(maxAge) * 1000}`
 ): string => {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn });
+  return jwt.sign(payload, secretKey, { expiresIn });
 };
 
 export const generateLongLivedToken = (payload: object): string => {
-  return jwt.sign(payload, SECRET_KEY); // Sin expiresIn
+  return jwt.sign(payload, secretKey); // Sin expiresIn
 };
 
 export const verifyToken = (token: string): any => {
-  return jwt.verify(token, SECRET_KEY);
+  return jwt.verify(token, secretKey);
 };

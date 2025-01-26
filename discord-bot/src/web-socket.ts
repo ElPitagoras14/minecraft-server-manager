@@ -28,6 +28,22 @@ interface RequestMapItem {
 
 const requestMap: Map<string, RequestMapItem> = new Map();
 let wsConn: connection | null = null;
+let reconnectAttempts = 0;
+
+const tryReconnect = () => {
+  if (reconnectAttempts < 5) {
+    reconnectAttempts++;
+    setTimeout(() => {
+      wsConn = null;
+      initWebSocketConnection();
+    }, 5000);
+  } else {
+    logger.error("Maximum reconnect attempts reached", {
+      filename: "web-socket.ts",
+      func: "tryReconnect",
+    });
+  }
+};
 
 export const initWebSocketConnection = () => {
   const wsClient = new WebSocketClient();
@@ -38,21 +54,13 @@ export const initWebSocketConnection = () => {
       func: "wsClient.on",
     });
 
+    reconnectAttempts = 0;
+
     connection.on("message", async (message: Message) => {
-      logger.debug("Received message from WebSocket", {
-        filename: "web-socket.ts",
-        func: "connection.on",
-      });
       if (message.type === "utf8") {
         const { action, ...extra } = JSON.parse(
           (message as IUtf8Message).utf8Data
         );
-        logger.debug("Received message from WebSocket", {
-          filename: "web-socket.ts",
-          func: "connection.on",
-          extra: { action, extra },
-        });
-
         if (action === "checkServerIsReady") {
           const { serverId } = extra;
           const requestItem = requestMap.get(serverId);
@@ -74,6 +82,7 @@ export const initWebSocketConnection = () => {
         filename: "web-socket.ts",
         func: "connection.on",
       });
+      tryReconnect();
     });
 
     wsConn = connection;
@@ -85,6 +94,7 @@ export const initWebSocketConnection = () => {
       func: "wsClient.on",
       extra: error,
     });
+    tryReconnect();
   });
 
   wsClient.connect(`ws://${host}:${port}`);
@@ -99,10 +109,6 @@ export const checkServerIsReady = async (
     | CommandInteraction<CacheType>
     | ButtonInteraction<CacheType>
 ) => {
-  logger.info("Checking server status", {
-    filename: "web-socket.ts",
-    func: "checkServerIsReady",
-  });
   if (!wsConn) {
     logger.error("No connection to the backend", {
       filename: "web-socket.ts",
@@ -122,10 +128,6 @@ export const checkServerIsReady = async (
   }
 
   try {
-    logger.debug("Sending message to WebSocket", {
-      filename: "web-socket.ts",
-      func: "checkServerIsReady",
-    });
     const message = JSON.stringify({
       action: "checkServerIsReady",
       serverId,

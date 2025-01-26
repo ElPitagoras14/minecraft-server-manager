@@ -19,7 +19,7 @@ export const createTable = (headers: string[], rows: string[][]): string => {
   return `${headerRow}\n${separator}\n${dataRows}`;
 };
 
-export const getAuthToken = async () => {
+const tryGetAuthToken = async (attempts: number = 0): Promise<string | null> => {
   try {
     const loginOptions = {
       url: `http://${backend.host}:${backend.port}/auth/login`,
@@ -44,10 +44,34 @@ export const getAuthToken = async () => {
 
     return token;
   } catch (error) {
-    logger.error("Error getting Auth Token:", {
+    if (attempts < 5) {
+      logger.warn(`Error getting Auth Token, attempt ${attempts + 1}/5. Retrying...`, {
+        filename: "check-init.ts",
+        func: "execute",
+        extra: error,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // Esperar 5 segundos
+      return tryGetAuthToken(attempts + 1);
+    } else {
+      logger.error("Error getting Auth Token after 5 attempts:", {
+        filename: "check-init.ts",
+        func: "execute",
+        extra: error,
+      });
+      return null;
+    }
+  }
+};
+
+export const getAuthToken = async () => {
+  const token = await tryGetAuthToken();
+  if (token) {
+    return token;
+  } else {
+    logger.error("Failed to retrieve auth token after multiple attempts", {
       filename: "check-init.ts",
-      func: "execute",
-      extra: error,
+      func: "getAuthToken",
     });
+    throw new Error("Failed to retrieve auth token");
   }
 };

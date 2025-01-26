@@ -6,4 +6,5 @@ dotenv.config({ path: envPath });
 
 export const authConfig = {
   secretKey: process.env.AUTH_SECRET_KEY,
+  maxAge: process.env.AUTH_EXPIRE_MINUTES,
 };

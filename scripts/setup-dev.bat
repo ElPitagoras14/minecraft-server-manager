@@ -8,5 +8,9 @@ echo Installing discord bot dependencies...
 cd ../discord-bot
 cmd /c npm install
 
+echo Installing web dependencies...
+cd ../web
+cmd /c npm install
+
 echo Setup completed successfully!
 exit

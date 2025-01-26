@@ -31,6 +31,14 @@
       "options": {
         "cwd": "${workspaceFolder}/backend"
       }
+    },
+    {
+      "label": "Run Web",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      }
     }
   ]
 }

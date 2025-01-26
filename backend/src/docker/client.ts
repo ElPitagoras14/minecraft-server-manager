@@ -161,7 +161,7 @@ export const restartContainer = async (containerId: string) => {
 
 export const createContainer = async (
   version: string,
-  newPort: string,
+  newPort: string | number,
   serverProperties: any
 ) => {
   const { motd, maxPlayers, difficulty, worldName } = serverProperties;

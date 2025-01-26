@@ -1,4 +1,5 @@
-import express from "express";
+import express, { Application } from 'express';
+import cors from 'cors';
 import { generalConfig } from "./config";
 import { logger } from "./log";
 import { createAdmin } from "./init";
@@ -8,6 +9,7 @@ import { authenticateToken } from "./features/auth/middleware";
 import serverRouter from "./features/server/route";
 import authRouter from "./features/auth/route";
 
+
 const {
   backend: { host = "localhost", port = 3000 },
 } = generalConfig;
@@ -16,9 +18,11 @@ const {
   await createAdmin();
 })();
 
-const app = express();
+const app: Application = express();
 
 app.use(express.json());
+app.use(cors());
+
 app.use("/server", authenticateToken, serverRouter);
 app.use("/auth", authRouter);
 
