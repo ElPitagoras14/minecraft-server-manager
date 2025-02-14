@@ -34,7 +34,7 @@ export async function execute(interaction: CommandInteraction) {
       ?.roles.cache.map((role) => role.name);
 
     const allServerOptions = {
-      url: `http://${host}:${port}/server`,
+      url: `http://${host}:${port}/servers`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -45,7 +45,6 @@ export async function execute(interaction: CommandInteraction) {
         requesterUser: username,
       },
     };
-    console.log(allServerOptions);
     const response = await axios.request(allServerOptions);
     const {
       data: {
@@ -61,7 +60,9 @@ export async function execute(interaction: CommandInteraction) {
     }
 
     const selectOptions = items.map((item: any) =>
-      new StringSelectMenuOptionBuilder().setLabel(item.name).setValue(item.id)
+      new StringSelectMenuOptionBuilder()
+        .setLabel(item.name)
+        .setValue(`${item.id}`)
     );
     const select = new StringSelectMenuBuilder()
       .setCustomId("server-info")
@@ -71,9 +72,10 @@ export async function execute(interaction: CommandInteraction) {
       select
     );
 
-    const headers = ["ID", "World Name", "Version", "Port", "Status"];
+    const headers = ["ID", "Container ID", "World Name", "Version", "Port", "Status"];
     const rows = items.map((item: any) => [
-      item.id,
+      `${item.id}`,
+      item.containerId,
       item.name,
       item.version,
       `${item.port}`,

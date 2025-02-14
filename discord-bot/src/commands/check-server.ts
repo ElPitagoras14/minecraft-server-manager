@@ -7,41 +7,57 @@ import axios, { isAxiosError } from "axios";
 import { logger } from "../log";
 import { generalConfig } from "../config";
 import { authToken } from "..";
+import { getEmbedButtons, getServerInfoEmbed } from "../utils";
 
 const {
   backend: { host, port },
 } = generalConfig;
 
 export const data = new SlashCommandBuilder()
-  .setName("checkjob")
-  .setDescription("Check if the server is ready")
-  .addIntegerOption((option) =>
-    option.setName("job-id").setDescription("The job ID").setRequired(true)
+  .setName("checkserver")
+  .setDescription("Check the status of the server")
+  .addStringOption((option) =>
+    option
+      .setName("server-id")
+      .setDescription("The server ID")
+      .setRequired(true)
   );
 
 export async function execute(interaction: CommandInteraction) {
   try {
     logger.info("Checking server status", {
-      filename: "check-init.ts",
+      filename: "check-server.ts",
       func: "execute",
     });
-    const jobId = interaction.options.get("job-id")?.value;
-    const checkStatusOptions = {
-      url: `http://${host}:${port}/server/check-init/${jobId}`,
+    const serverId = interaction.options.get("server-id")?.value;
+    const serverInfoOptions = {
+      url: `http://${host}:${port}/servers/${serverId}`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
     };
-    const response = await axios.request(checkStatusOptions);
+    const response = await axios.request(serverInfoOptions);
     const {
-      data: {
-        payload: { status },
-      },
+      data: { payload },
     } = response;
-    return interaction.reply(
-      `Status: ${status === "in-progress" ? "In progress" : "Ready"}`
-    );
+
+    if (Object.keys(payload).length === 0) {
+      return interaction.reply({
+        content: "Server not found.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const { status } = payload;
+    const serverInfoEmbed = getServerInfoEmbed(serverId as string, payload);
+    const rowButtons = getEmbedButtons(serverId as string, status);
+
+    await interaction.reply({
+      embeds: [serverInfoEmbed],
+      components: [rowButtons],
+      flags: MessageFlags.Ephemeral,
+    });
   } catch (error: any) {
     if (isAxiosError(error)) {
       const { response: { data } = {} } = error;

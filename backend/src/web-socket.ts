@@ -1,14 +1,11 @@
 import { server as WebSocketServer, connection } from "websocket";
 import http from "http";
 import { logger } from "./log";
-import { waitForRCON } from "./docker/client";
 import { generalConfig } from "./config";
 
 const {
-  backend: { host = "localhost", port = 3000 },
+  backend: { host = "localhost", port = 4011 },
 } = generalConfig;
-
-interface RequestMapItem {}
 
 export const requestMap: Map<string, connection> = new Map();
 
@@ -20,6 +17,7 @@ export function setupWebSocket(httpServer: http.Server) {
 
   wsServer.on("request", (request) => {
     const connection = request.accept(undefined, request.origin);
+
     logger.info(`Client connected from ${connection.remoteAddress}`, {
       filename: "web-socket.ts",
       func: "wsServer.request",
@@ -62,7 +60,7 @@ export function setupWebSocket(httpServer: http.Server) {
     });
 
     connection.on("close", (reasonCode, description) => {
-      logger.info(`Cliente desconectado: ${description}`, {
+      logger.info(`Client disconnected: ${description}`, {
         filename: "web-socket.ts",
         func: "connection.on",
       });

@@ -13,7 +13,7 @@ export const authenticateToken = async (
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
     const response = {
-      message: "Acceso no autorizado",
+      message: "Not authorized",
     };
     res.status(401).json(response);
     return;
@@ -25,7 +25,7 @@ export const authenticateToken = async (
     next();
   } catch (error) {
     const response = {
-      message: "Acceso no autorizado",
+      message: "Not authorized",
     };
     res.status(401).json(response);
     return;

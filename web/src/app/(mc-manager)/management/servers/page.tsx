@@ -8,14 +8,28 @@ import axios, { isAxiosError } from "axios";
 import { useEffect, useState } from "react";
 import CreateDialog from "./components/create-dialog";
 import { Button } from "@/components/ui/button";
-import { Play, RotateCcw, Square } from "lucide-react";
+import { CloudDownload, Pencil, Play, RotateCcw, Square } from "lucide-react";
 import DeleteDialog from "./components/delete-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useErrorDialog } from "@/hooks/use-error-dialog";
-import { ComboboxItem, ErrorResponse } from "@/utils/interfaces";
+import { ComboboxItem, ErrorResponse, QueryParams } from "@/utils/interfaces";
 import { Icons } from "@/components/ui/icons";
 import LoadableIcon from "@/components/loadable-icon";
-import UpdateDialog from "./components/update-dialog";
+import { useRouter } from "next/navigation";
+import { startServer, stopServer, restartServer } from "./components/util";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { DataTableColumnHeader } from "@/components/ui/data-table-header";
+import {
+  ColumnFiltersState,
+  PaginationState,
+  SortingState,
+} from "@tanstack/react-table";
+import { getQueryParamsOptions } from "@/utils/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -24,59 +38,21 @@ interface ServerResponse {
   total: number;
 }
 
-const startServer = async (
-  id: number,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/start/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
-
-const stopServer = async (
-  id: number,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/stop/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
-
 const getData = async (
   token: string,
-  requesterId: string
+  requesterId: string,
+  params: QueryParams
 ): Promise<ServerResponse> => {
   const dataOptions = {
-    url: `${API_URL}/server`,
+    url: `${API_URL}/servers`,
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
     },
     params: {
       requesterId,
-    },
+      ...getQueryParamsOptions(params),
+    }
   };
 
   const response = await axios.request(dataOptions);
@@ -94,7 +70,6 @@ const getVersions = async (): Promise<ComboboxItem[]> => {
   };
 
   const response = await axios.request(dataOptions);
-  console.log(response.data);
   const {
     data: { result },
   } = response;
@@ -104,27 +79,37 @@ const getVersions = async (): Promise<ComboboxItem[]> => {
     value: version,
   }));
 
-  return parsedItems;
+  return [
+    {
+      label: "Latest",
+      value: "LATEST",
+    },
+    ...parsedItems,
+  ];
 };
 
 export default function ServersPage() {
   const { data: session } = useSession();
-  const { user: { token = "", id: userId = "" } = {} } = session || {};
+  const {
+    user: { token = "", id: userId = "", username = "", isAdmin = false } = {},
+  } = session || {};
 
   const { showError } = useErrorDialog();
+  const router = useRouter();
 
   const [data, setData] = useState<ServerResponse>({
     items: [],
     total: 0,
   });
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [versions, setVersions] = useState<ComboboxItem[]>([]);
-  // const [pagination, setPagination] = useState<PaginationState>({
-  //   pageIndex: 0,
-  //   pageSize: 10,
-  // });
-  // const [sorting, setSorting] = useState<SortingState>([]);
-  // const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [filter, setFilter] = useState<ColumnFiltersState>([]);
 
   const handleErrorResponse = (error: unknown) => {
     if (isAxiosError(error)) {
@@ -138,7 +123,7 @@ export default function ServersPage() {
         return;
       } else if (data.statusCode === 404) {
         toast({
-          title: "No se encontraron datos",
+          title: "No data found",
         });
         setData({
           items: [],
@@ -152,7 +137,7 @@ export default function ServersPage() {
     } else {
       toast({
         variant: "destructive",
-        title: "Error desconocido",
+        title: "Unknown error",
       });
     }
   };
@@ -160,7 +145,11 @@ export default function ServersPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await getData(token, userId);
+      const data = await getData(token, userId, {
+        pagination,
+        sorting,
+        filter,
+      });
       setData(data);
     } catch (error: unknown) {
       handleErrorResponse(error);
@@ -169,9 +158,9 @@ export default function ServersPage() {
     }
   };
 
-  const handleStartServer = async (id: number, name: string) => {
+  const handleStartServer = async (id: string, name: string) => {
     try {
-      await startServer(id, token, userId);
+      await startServer(id, token, userId, username);
       await loadData();
       toast({
         title: `Server ${name} started`,
@@ -182,12 +171,24 @@ export default function ServersPage() {
     }
   };
 
-  const handleStopServer = async (id: number, name: string) => {
+  const handleStopServer = async (id: string, name: string) => {
     try {
-      await stopServer(id, token, userId);
+      await stopServer(id, token, userId, username);
       await loadData();
       toast({
         title: `Server ${name} stopped`,
+      });
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    }
+  };
+
+  const handleRestartServer = async (id: string, name: string) => {
+    try {
+      await restartServer(id, token, userId, username);
+      await loadData();
+      toast({
+        title: `Server ${name} restarted`,
       });
     } catch (error: unknown) {
       handleErrorResponse(error);
@@ -199,43 +200,91 @@ export default function ServersPage() {
     {
       id: "actions",
       label: "Actions",
-      header: "Actions",
+      header: () => <div className="text-center">Actions</div>,
       cell: ({ row }) => {
         const { original: item } = row;
         const { status, id, name } = item;
         return (
-          <div className="flex flex-row space-x-2">
-            {status === "READY" && (
-              <LoadableIcon
-                icon={
-                  <Square className="h-5 w-5 hover:cursor-pointer hover:text-primary" />
-                }
-                func={async () => await handleStopServer(id, name)}
-              />
-            )}
-            {status === "INITIALIZING" && (
-              <Icons.spinner className="animate-spin h-5 w-5" />
-            )}
-            {status === "DOWN" && (
-              <LoadableIcon
-                icon={
-                  <Play className="h-5 w-5 hover:cursor-pointer hover:text-primary" />
-                }
-                func={async () => await handleStartServer(id, name)}
-              />
-            )}
-            <UpdateDialog item={item} updateData={loadData} />
-            <DeleteDialog item={item} updateData={loadData} />
-          </div>
+          <TooltipProvider>
+            <div className="flex flex-row space-x-2 justify-center">
+              {status === "RUNNING" && (
+                <Tooltip>
+                  <TooltipTrigger>
+                    <LoadableIcon
+                      icon={
+                        <Square className="h-5 w-5 hover:cursor-pointer hover:text-primary" />
+                      }
+                      func={async () => await handleStopServer(id, name)}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Stop</TooltipContent>
+                </Tooltip>
+              )}
+              {status === "STARTING" && (
+                <Icons.spinner className="animate-spin h-5 w-5" />
+              )}
+              {status === "STOPPED" && (
+                <Tooltip>
+                  <TooltipTrigger>
+                    <LoadableIcon
+                      icon={
+                        <Play className="h-5 w-5 hover:cursor-pointer hover:text-primary" />
+                      }
+                      func={async () =>
+                        await handleStartServer(id as string, name)
+                      }
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Start</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger>
+                  <RotateCcw
+                    onClick={async () => await handleRestartServer(id, name)}
+                    className="h-5 w-5 hover:cursor-pointer hover:text-primary"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>Restart</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Pencil
+                    onClick={() => router.push(`/management/servers/${id}`)}
+                    className="h-5 w-5 hover:cursor-pointer hover:text-primary"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>Edit</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  <DeleteDialog item={item} updateData={loadData} />
+                </TooltipTrigger>
+                <TooltipContent>Delete</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         );
       },
     },
   ];
 
+  const finalColumns: CustomColumnDef<Server>[] = isAdmin
+    ? [
+        ...newColumns.splice(0, 1),
+        {
+          accessorKey: "username",
+          header: ({ column }) => (
+            <DataTableColumnHeader column={column} title={"Owner"} />
+          ),
+        },
+        ...newColumns.splice(0),
+      ]
+    : newColumns;
+
   useEffect(() => {
     (async () => {
       const versions = await getVersions();
-      console.log(versions);
       setVersions(versions);
     })();
     if (!token) {
@@ -246,6 +295,16 @@ export default function ServersPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    (async () => {
+      await loadData();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination, sorting, filter]);
 
   return (
     <div className="flex flex-col w-full">
@@ -260,13 +319,23 @@ export default function ServersPage() {
           </div>
           <div className="flex flex-row items-center space-x-2">
             <Button variant="secondary" disabled={isLoading} onClick={loadData}>
-              <RotateCcw />
+              <CloudDownload className="h-5 w-5" />
               Refresh
             </Button>
             <CreateDialog updateData={loadData} formData={{ versions }} />
           </div>
         </div>
-        <DataTable columns={newColumns} data={data.items} />
+        <DataTable
+          columns={finalColumns}
+          data={data.items}
+          serverSide={{
+            totalRows: data.total,
+            isLoading,
+            setServerColumnFilters: setFilter,
+            setServerPagination: setPagination,
+            setServerSorting: setSorting,
+          }}
+        />
       </main>
     </div>
   );

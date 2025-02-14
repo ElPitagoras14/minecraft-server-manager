@@ -1,5 +1,5 @@
 import Redis from "ioredis";
-import { databaseConfig } from "./config";
+import { databaseConfig } from "../databases/config";
 
 const { queueDb } = databaseConfig;
 

@@ -27,7 +27,7 @@ export function DataTablePagination<TData>({
   return (
     <div className="flex items-center justify-between px-2">
       <div className="flex-1 text-sm text-muted-foreground">
-        Mostrando {currPageIndex * currPageSize + 1}-
+        Mostrando {totalRows === 0 ? 0 : currPageIndex * currPageSize + 1}-
         {Math.min((currPageIndex + 1) * currPageSize, totalRows)} de {totalRows}
       </div>
       <div className="flex items-center space-x-6 lg:space-x-8">

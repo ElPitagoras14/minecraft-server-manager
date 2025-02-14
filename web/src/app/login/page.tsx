@@ -77,6 +77,7 @@ export default function LoginPage() {
         redirect: false,
         redirectTo: "/",
       });
+      console.log("response", response);
       if (!response || response.error) {
         toast({
           title: "Error logging in",

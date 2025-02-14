@@ -1,16 +1,33 @@
 version: "3"
 services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        - PORT=${FRONTEND_PORT}
+        - AUTH_SECRET=${AUTH_SECRET}
+        - SERVER_API_URL=http://backend:3000
+        - NEXT_PUBLIC_API_URL=http://localhost:4012
+        - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
+        - MEXTAUTH_URL=http://localhost:4010
+    container_name: web-mc
+    ports:
+      - 4010:${FRONTEND_PORT}
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: backend-mc
     ports:
-      - 8001:3000
+      - 4012:3000
     environment:
       - BACKEND_PORT=3000
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
       - DOCKER_API_URL=http://host.docker.internal:2375
+      - DOCKER_DATA=${DOCKER_DATA}
       - ADMIN_DISCORD_ID=${ADMIN_DISCORD_ID}
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
@@ -22,24 +39,12 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
+    volumes:
+      - ${DOCKER_DATA}/servers:/minecraft-server-manager/servers
+      - ${DOCKER_DATA}/backups:/minecraft-server-manager/backups
     depends_on:
       - mysql
       - redis
-    restart: unless-stopped
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-      args:
-        - PORT=${FRONTEND_PORT}
-        - AUTH_SECRET=${AUTH_SECRET}
-        - SERVER_API_URL=http://backend:3000
-        - NEXT_PUBLIC_API_URL=http://localhost:8001
-        - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
-    container_name: web-mc
-    ports:
-      - 8002:${FRONTEND_PORT}
     restart: unless-stopped
 
   discord-bot:
@@ -58,19 +63,22 @@ services:
       - backend
     restart: unless-stopped
 
-  redis:
-    image: redis:latest
-    container_name: redis-mc
-    restart: unless-stopped
-
   mysql:
     image: mysql:5.7
     ports:
-      - 8003:3306
+      - 4013:3306
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     volumes:
       - ./backend/src/databases/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ${DOCKER_DATA}/mysql-data:/var/lib/mysql
     container_name: mysql-mc
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    ports:
+      - 4014:6379
+    container_name: redis-mc
     restart: unless-stopped

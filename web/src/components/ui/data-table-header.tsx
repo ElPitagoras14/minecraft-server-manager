@@ -87,95 +87,97 @@ export function DataTableColumnHeader<TData, TValue>({
   }, [fetchOptions, token]);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="px-2">
-          {title} <Settings2 />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className={cn(
-          filterOptions ? "flex flex-row" : "",
-          "m-0 p-0",
-          className
-        )}
-      >
-        {canSort && (
-          <div className="min-w-[110px]">
-            <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <div className="pr-1">
-              <DropdownMenuCheckboxItem
-                checked={sortDirection === false}
-                onClick={() => {
-                  column.clearSorting();
-                }}
-              >
-                Ninguno
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={sortDirection === "asc"}
-                onClick={() => column.toggleSorting(false)}
-              >
-                Asc
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={sortDirection === "desc"}
-                onClick={() => column.toggleSorting(true)}
-              >
-                Desc
-              </DropdownMenuCheckboxItem>
-            </div>
-          </div>
-        )}
-        {filterControl && canSort && (
-          <div className="flex flex-row">
-            <Separator orientation="vertical" className="h-full" />
-          </div>
-        )}
-        {filterControl && (
-          <div className="min-w-[110px]">
-            <DropdownMenuLabel>Filtrar por</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {isLoading ? (
-              <div className="flex items-center justify-center h-20">
-                <Icons.spinner className="h-8 w-8 animate-spin"></Icons.spinner>
-              </div>
-            ) : (
-              <div className="max-h-72 custom-scrollbar">
+    <div className="px-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="px-2">
+            {title} <Settings2 />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className={cn(
+            filterOptions ? "flex flex-row" : "",
+            "m-0 p-0",
+            className
+          )}
+        >
+          {canSort && (
+            <div className="min-w-[110px]">
+              <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="pr-1">
                 <DropdownMenuCheckboxItem
-                  checked={column.getFilterValue() === undefined}
+                  checked={sortDirection === false}
                   onClick={() => {
-                    column.setFilterValue(undefined);
+                    column.clearSorting();
                   }}
                 >
-                  Todos
+                  Ninguno
                 </DropdownMenuCheckboxItem>
-                <DropdownMenuSeparator className="m-0 p-0" />
-                {options!.map((option) => {
-                  const { label, value } = option;
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={value as string}
-                      checked={hasSearchItem(columnFilters, column.id, value)}
-                      onClick={() => {
-                        const newFilterValues = toggleFilterValue(
-                          columnFilters,
-                          column.id,
-                          value
-                        );
-                        table!.setColumnFilters(newFilterValues);
-                      }}
-                    >
-                      {label}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
+                <DropdownMenuCheckboxItem
+                  checked={sortDirection === "asc"}
+                  onClick={() => column.toggleSorting(false)}
+                >
+                  Asc
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={sortDirection === "desc"}
+                  onClick={() => column.toggleSorting(true)}
+                >
+                  Desc
+                </DropdownMenuCheckboxItem>
               </div>
-            )}
-          </div>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            </div>
+          )}
+          {filterControl && canSort && (
+            <div className="flex flex-row">
+              <Separator orientation="vertical" className="h-full" />
+            </div>
+          )}
+          {filterControl && (
+            <div className="min-w-[110px]">
+              <DropdownMenuLabel>Filtrar por</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {isLoading ? (
+                <div className="flex items-center justify-center h-20">
+                  <Icons.spinner className="h-8 w-8 animate-spin"></Icons.spinner>
+                </div>
+              ) : (
+                <div className="max-h-72 custom-scrollbar">
+                  <DropdownMenuCheckboxItem
+                    checked={column.getFilterValue() === undefined}
+                    onClick={() => {
+                      column.setFilterValue(undefined);
+                    }}
+                  >
+                    Todos
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator className="m-0 p-0" />
+                  {options!.map((option) => {
+                    const { label, value } = option;
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={value as string}
+                        checked={hasSearchItem(columnFilters, column.id, value)}
+                        onClick={() => {
+                          const newFilterValues = toggleFilterValue(
+                            columnFilters,
+                            column.id,
+                            value
+                          );
+                          table!.setColumnFilters(newFilterValues);
+                        }}
+                      >
+                        {label}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }

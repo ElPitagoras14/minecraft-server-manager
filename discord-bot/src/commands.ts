@@ -1,11 +1,11 @@
-import * as checkinfo from "./commands/check-info";
-import * as checkjob from "./commands/check-job";
-import * as createserver from "./commands/create-server";
+import * as checkserver from "./commands/check-server";
+import * as checktask from "./commands/check-task";
 import * as listserver from "./commands/list-server";
+import * as createuser from "./commands/create-user";
 
 export const commands = {
-  checkinfo,
-  checkjob,
-  createserver,
+  checkserver,
+  checktask,
+  createuser,
   listserver,
 };

@@ -21,13 +21,13 @@ import { useErrorDialog } from "@/hooks/use-error-dialog";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const deleteServer = async (
-  id: number,
+  id: string,
   token: string,
   requesterId: string,
   requesterUser: string
 ) => {
   const deleteOptions = {
-    url: `${API_URL}/server/${id}`,
+    url: `${API_URL}/servers/${id}`,
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -73,7 +73,7 @@ export default function DeleteDialog({ item, updateData }: DeleteDialogProps) {
         return;
       } else if (data.statusCode === 404) {
         toast({
-          title: "No se encontraron datos",
+          title: "No data found",
         });
         return;
       }
@@ -83,7 +83,7 @@ export default function DeleteDialog({ item, updateData }: DeleteDialogProps) {
     } else {
       toast({
         variant: "destructive",
-        title: "Error desconocido",
+        title: "Uknown error",
       });
     }
   };
