@@ -12,7 +12,7 @@ import { signOut } from "next-auth/react";
 
 export function NavFooter() {
   const { data } = useSession();
-  const { user: { name = "", isAdmin = false } = {} } = data || {};
+  const { user: { username = "", isAdmin = false } = {} } = data || {};
   const { state } = useSidebar();
 
   return (
@@ -25,24 +25,26 @@ export function NavFooter() {
             </div>
             {state === "expanded" && (
               <div className="flex flex-col">
-                <p className="text-sm font-semibold">{name}</p>
+                <p className="text-sm font-semibold">{username}</p>
                 <p className="text-xs text-muted-foreground">
                   {isAdmin ? "Administrator" : "User"}
                 </p>
               </div>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={async () =>
-              await signOut({
-                redirectTo: "/login",
-              })
-            }
-          >
-            <LogOut />
-          </Button>
+          {state === "expanded" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={async () =>
+                await signOut({
+                  redirectTo: "/login",
+                })
+              }
+            >
+              <LogOut />
+            </Button>
+          )}
         </div>
       </SidebarMenuItem>
     </SidebarMenu>

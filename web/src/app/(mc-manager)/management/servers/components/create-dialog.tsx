@@ -49,15 +49,13 @@ const createServer = async (
   requesterUser: string
 ) => {
   const createOptions = {
-    url: `${API_URL}/server`,
+    url: `${API_URL}/servers`,
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },
     data: {
-      worldName: data.name,
-      version: data.version,
-      motd: data.description,
+      serverProperties: data,
       requesterId,
       requesterUser,
     },
@@ -107,7 +105,7 @@ export default function CreateDialog({
         setOpen(false);
         toast({
           title: "Server created",
-          description: "Server created. It will be ready shortly.",
+          description: "It will be ready shortly.",
         });
       } catch (error: unknown) {
         console.error("error", error);
@@ -122,14 +120,23 @@ export default function CreateDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) {
+          form.reset();
+          form.setValue("version", "");
+        }
+      }}
+    >
       <DialogTrigger>
         <Button>
           <Plus />
           Create
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="min-w-[50vw]">
         <DialogHeader>
           <DialogTitle>Create a new server</DialogTitle>
           <DialogDescription>
@@ -137,8 +144,8 @@ export default function CreateDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={onSubmit}>
-            <div className="flex flex-col space-y-4">
+          <form>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 pb-4">
               {createFields.map((field) => (
                 <CustomField
                   key={field.name}
@@ -146,18 +153,19 @@ export default function CreateDialog({
                   fieldInfo={field}
                 />
               ))}
-              <div className="w-full pt-2">
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={!form.formState.isDirty && form.formState.isValid}
-                >
-                  {isLoading && (
-                    <Icons.spinner className="animate-spin mr-1 h-11" />
-                  )}
-                  Create
-                </Button>
-              </div>
+            </div>
+            <div className="w-full pt-2">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={!form.formState.isDirty && form.formState.isValid}
+                onClick={onSubmit}
+              >
+                {isLoading && (
+                  <Icons.spinner className="animate-spin mr-1 h-11" />
+                )}
+                Create
+              </Button>
             </div>
           </form>
         </Form>

@@ -42,6 +42,7 @@ const tryReconnect = () => {
       filename: "web-socket.ts",
       func: "tryReconnect",
     });
+    process.exit(1);
   }
 };
 
@@ -58,12 +59,13 @@ export const initWebSocketConnection = () => {
 
     connection.on("message", async (message: Message) => {
       if (message.type === "utf8") {
+        console.log("Received message", (message as IUtf8Message).utf8Data);
         const { action, ...extra } = JSON.parse(
           (message as IUtf8Message).utf8Data
         );
         if (action === "checkServerIsReady") {
           const { serverId } = extra;
-          const requestItem = requestMap.get(serverId);
+          const requestItem = requestMap.get(`${serverId}`);
           if (requestItem) {
             const { interaction, worldName } = requestItem;
             const user = interaction.user;

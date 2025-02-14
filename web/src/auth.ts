@@ -4,7 +4,7 @@ import axios from "axios";
 import { jwtDecode, JwtPayload } from "jwt-decode";
 
 const API_URL = process.env.SERVER_API_URL;
-const MAX_AGE = parseInt(process.env.AUTH_EXPIRE_MINUTES || "3600");
+const MAX_AGE = parseInt(process.env.AUTH_EXPIRE_MINUTES || "120");
 
 interface CustomJwtPayload extends JwtPayload {
   id: string;
@@ -55,17 +55,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const decodedToken = jwtDecode<CustomJwtPayload>(token);
 
           const { id, username, isAdmin } = decodedToken;
-          const user = { id, name: username, isAdmin, token };
+          const user = { id, username, isAdmin, token };
           return user;
         } catch (error: unknown) {
-          console.error("error", error);
-          return null
+          if (axios.isAxiosError(error)) {
+            const { response } = error;
+            if (response?.status === 401) {
+              return null;
+            }
+            console.error("error", response?.data.message);
+            return null;
+          }
+          return null;
         }
       },
     }),
   ],
   jwt: {
-    maxAge: MAX_AGE,
+    maxAge: MAX_AGE * 60,
   },
   callbacks: {
     jwt({ token, user, session }) {
@@ -88,5 +95,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: "/login",
   },
-  debug: true,
 });

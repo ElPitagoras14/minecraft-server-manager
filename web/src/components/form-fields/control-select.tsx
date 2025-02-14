@@ -12,7 +12,6 @@ import { ComboboxItem } from "@/utils/interfaces";
 interface ControlSelectProps {
   options: ComboboxItem[];
   formValue: string;
-  initValue: string;
   onFormValueChange: (value: string) => void;
   setFormValue: (value: string) => void;
   disabled?: boolean;
@@ -21,7 +20,6 @@ interface ControlSelectProps {
 export default function ControlSelect({
   options,
   formValue,
-  initValue,
   onFormValueChange,
   setFormValue,
   disabled,
@@ -34,7 +32,7 @@ export default function ControlSelect({
             <SelectValue></SelectValue>
           </SelectTrigger>
         </FormControl>
-        <SelectContent className="w-96 h-72">
+        <SelectContent className="w-96 max-h-72">
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -46,7 +44,7 @@ export default function ControlSelect({
         <X
           className="opacity-50 hover:opacity-100 hover:cursor-pointer h-5 w-5"
           onClick={() => {
-            setFormValue(initValue);
+            setFormValue("");
           }}
         />
       )}

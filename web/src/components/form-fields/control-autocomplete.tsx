@@ -19,7 +19,6 @@ import { ComboboxItem } from "@/utils/interfaces";
 interface ComboboxProps {
   options: ComboboxItem[];
   formValue: string;
-  initValue: string;
   setFormValue: (value: string) => void;
   disabled?: boolean;
 }
@@ -27,7 +26,6 @@ interface ComboboxProps {
 export default function ControlAutocomplete({
   options,
   formValue,
-  initValue,
   setFormValue,
   disabled,
 }: ComboboxProps) {
@@ -102,7 +100,7 @@ export default function ControlAutocomplete({
         <X
           className="opacity-50 hover:opacity-100 hover:cursor-pointer h-5 w-5"
           onClick={() => {
-            setFormValue(initValue);
+            setFormValue("");
           }}
         />
       )}

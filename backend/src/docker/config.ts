@@ -6,4 +6,5 @@ dotenv.config({ path: envPath });
 
 export const dockerConfig = {
   dockerUrl: process.env.DOCKER_API_URL,
+  dockerData: process.env.DOCKER_DATA,
 };

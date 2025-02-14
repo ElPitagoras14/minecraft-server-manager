@@ -8,13 +8,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { useErrorDialog } from "../hooks/use-error-dialog";
 
 const statusCodeMap: Record<number, string> = {
-  404: "No encontrado",
-  409: "Conflicto",
-  500: "Error interno del servidor",
+  404: "Not Found",
+  409: "Conflict",
+  500: "Internal Server Error",
 };
 
 export default function ErrorDialog() {
@@ -36,7 +41,7 @@ export default function ErrorDialog() {
           </div>
         </AlertDialogHeader>
         <div className="flex flex-row items-center justify-between">
-          <ul className="ml-6 list-disc [&>li:not(:first-child)]:mt-2">
+          <ul className="ml-6 list-disc [&>li:not(:first-child)]:mt-2 max-w-96">
             <li>Petición: {requestId}</li>
             <li>Código: {statusCode}</li>
             <li>Mensaje: {message}</li>

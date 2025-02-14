@@ -65,8 +65,8 @@ export default function CustomField({
         </FormControl>
         <FormMessage />
       </FormItem>
-    )
-  };
+    );
+  }
 
   if (type === "autocomplete") {
     return (
@@ -83,9 +83,11 @@ export default function CustomField({
             <ControlAutocomplete
               options={fieldInfo.options!}
               formValue={field.value}
-              initValue={fieldInfo.initValue as string}
               setFormValue={(value: string) =>
-                formContext.setValue(name, value, { shouldDirty: true })
+                formContext.setValue(name, value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
               }
               disabled={disabled}
             ></ControlAutocomplete>
@@ -111,10 +113,12 @@ export default function CustomField({
             <ControlSelect
               options={fieldInfo.options!}
               formValue={field.value}
-              initValue={fieldInfo.initValue as string}
               onFormValueChange={field.onChange}
               setFormValue={(value: string) =>
-                formContext.setValue(name, value, { shouldDirty: true })
+                formContext.setValue(name, value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
               }
               disabled={disabled}
             />

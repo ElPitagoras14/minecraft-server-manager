@@ -6,6 +6,7 @@ const { serverManagerDb } = databaseConfig;
 
 export const serverManagerPool = mysql.createPool({
   host: serverManagerDb.host,
+  port: parseInt(serverManagerDb.port || "3306"),
   user: serverManagerDb.user,
   password: serverManagerDb.password,
   database: serverManagerDb.database,

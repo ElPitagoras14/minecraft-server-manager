@@ -11,6 +11,7 @@ import { generalConfig } from "../config";
 import { authToken } from "..";
 import axios, { isAxiosError } from "axios";
 import { logger } from "../log";
+import { getEmbedButtons, getServerInfoEmbed } from "../utils";
 
 const {
   backend: { host, port },
@@ -23,102 +24,33 @@ export const handleStringSelectInput = async (
   if (customId === "server-info") {
     try {
       const serverId = interaction.values[0];
+      const userId = interaction.user.id;
+      const username = interaction.user.username;
 
-      const getServerInfoOptions = {
-        url: `http://${host}:${port}/server/${serverId}`,
+      const serverInfoOptions = {
+        url: `http://${host}:${port}/servers/${serverId}`,
         method: "GET",
         headers: {
           Authorization: `Bearer ${authToken}`,
         },
-      };
-
-      const response = await axios.request(getServerInfoOptions);
-      const {
-        data: {
-          payload: {
-            status,
-            name,
-            version,
-            port: worldPort,
-            creatorId,
-            roleName,
-          },
+        params: {
+          requesterId: userId,
+          requesterUser: username,
         },
+      };
+      const response = await axios.request(serverInfoOptions);
+      const {
+        data: { payload },
       } = response;
 
-      const serverEmbed = new EmbedBuilder()
-        .setColor(0x0099ff)
-        .setTitle(`Server ${name}`)
-        .addFields(
-          {
-            name: "ID",
-            value: serverId,
-          },
-          {
-            name: "Version",
-            value: version,
-            inline: true,
-          },
-          {
-            name: "Port",
-            value: `${worldPort}`,
-            inline: true,
-          },
-          {
-            name: "Status",
-            value: status,
-            inline: true,
-          }
-        )
-        .addFields(
-          {
-            name: "Creator",
-            value: `<@${creatorId}>`,
-            inline: true,
-          },
-          {
-            name: "Role",
-            value: roleName ?? "No role",
-            inline: true,
-          }
-        )
-        .setTimestamp();
+      const { status } = payload;
 
-      const startData = JSON.stringify({
-        customId: "start-server",
-        serverId,
-      });
-      const stopData = JSON.stringify({
-        customId: "stop-server",
-        serverId,
-      });
-
-      const startButton = new ButtonBuilder()
-        .setCustomId(startData)
-        .setLabel("Start Server")
-        .setStyle(ButtonStyle.Primary);
-
-      const stopButton = new ButtonBuilder()
-        .setCustomId(stopData)
-        .setLabel("Stop Server")
-        .setStyle(ButtonStyle.Danger);
-
-      if (status === "READY" || status === "INITIALIZING") {
-        startButton.setDisabled(true);
-      }
-
-      if (status === "DOWN" || status === "INITIALIZING") {
-        stopButton.setDisabled(true);
-      }
-
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        stopButton,
-        startButton
-      );
+      const serverInfoEmbed = getServerInfoEmbed(serverId as string, payload);
+      const rowButtons = getEmbedButtons(serverId as string, status);
 
       await interaction.reply({
-        embeds: [serverEmbed],
-        components: [row],
+        embeds: [serverInfoEmbed],
+        components: [rowButtons],
         flags: MessageFlags.Ephemeral,
       });
     } catch (error: any) {
