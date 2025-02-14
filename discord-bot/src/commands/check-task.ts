@@ -13,7 +13,7 @@ const {
 } = generalConfig;
 
 export const data = new SlashCommandBuilder()
-  .setName("checkjob")
+  .setName("checktask")
   .setDescription("Check if the server is ready")
   .addIntegerOption((option) =>
     option.setName("job-id").setDescription("The job ID").setRequired(true)

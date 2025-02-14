@@ -13,26 +13,26 @@ export const loginController = async (req: Request, res: Response) => {
   const childLogger = logger.child({
     extra: { requestId },
   });
+
   try {
     const {
       body: { username, password },
     } = req;
-    childLogger.info("Iniciando sesión", {
+    childLogger.info(`Logging in for user ${username}`, {
       filename: "service.ts",
       func: "loginController",
     });
-    const user = await getUserByUsername(username);
 
+    const user = await getUserByUsername(username);
     if (!user) {
       const response = {
         requestId,
         statusCode: 404,
-        message: "Usuario no encontrado",
+        message: "User not found",
       };
-      childLogger.error("Usuario no encontrado", {
+      childLogger.error(`User ${username} not found`, {
         filename: "service.ts",
         func: "loginController",
-        extra: response,
       });
       res.status(404).json(response);
       return;
@@ -43,27 +43,11 @@ export const loginController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 401,
-        message: "Contraseña incorrecta",
+        message: "Incorret password",
       };
-      childLogger.error("Contraseña incorrecta", {
+      childLogger.error("Incorrect password", {
         filename: "service.ts",
         func: "loginController",
-        extra: response,
-      });
-      res.status(401).json(response);
-      return;
-    }
-
-    if (!isPasswordValid) {
-      const response = {
-        requestId,
-        statusCode: 401,
-        message: "Contraseña incorrecta",
-      };
-      childLogger.error("Contraseña incorrecta", {
-        filename: "service.ts",
-        func: "loginController",
-        extra: response,
       });
       res.status(401).json(response);
       return;
@@ -84,22 +68,23 @@ export const loginController = async (req: Request, res: Response) => {
       });
     }
 
-    const response = {
-      requestId,
-      statusCode: 200,
-      message: "Sesión iniciada correctamente",
-      payload: {
-        token,
-      },
-    };
-    childLogger.info("Sesión iniciada correctamente", {
+    childLogger.info("Successfully logged in", {
       filename: "service.ts",
       func: "loginController",
     });
 
+    const response = {
+      requestId,
+      statusCode: 200,
+      message: "Successfully logged in",
+      payload: {
+        token,
+      },
+    };
+
     res.status(200).json(response);
   } catch (error: any) {
-    logger.error("Error interno del servidor", {
+    logger.error("Error logging in", {
       filename: "service.ts",
       func: "loginController",
       extra: error,
@@ -107,13 +92,8 @@ export const loginController = async (req: Request, res: Response) => {
     const response = {
       requestId,
       statusCode: 500,
-      message: "Internal server error",
+      message: "Error logging in",
     };
-    childLogger.error("Internal server error", {
-      filename: "service.ts",
-      func: "loginController",
-      extra: error,
-    });
     res.status(500).json(response);
   }
 };

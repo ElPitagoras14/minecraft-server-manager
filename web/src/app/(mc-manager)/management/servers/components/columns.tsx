@@ -2,7 +2,7 @@ import { CustomColumnDef } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-header";
 
 export type Server = {
-  id: number;
+  id: string;
   name: string;
   version: string;
   port: number;

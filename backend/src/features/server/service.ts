@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import {
-  checkStatusContainer,
   stopContainer,
   createContainer,
   deleteContainer,
@@ -9,7 +8,15 @@ import { logger } from "../../log";
 import { v4 as uuidv4 } from "uuid";
 import { addTaskToQueue, getTaskStatus } from "../../queue/task-queue-service";
 import { executeQuery, serverManagerPool } from "../../databases/clients";
-import { getNewPort } from "./utils";
+import {
+  getNewPort,
+  getParsedRequesterRoles,
+  parseMinecraftProperties,
+} from "./utils";
+import { serverConfig } from "./config";
+import fs from "fs";
+
+const { dockerData } = serverConfig;
 
 export const getAllServersController = async (req: Request, res: Response) => {
   const requestId = uuidv4();
@@ -20,25 +27,28 @@ export const getAllServersController = async (req: Request, res: Response) => {
     const {
       query: { requesterId = "", requesterRoles = [] },
     } = req;
-    const roles = Array.isArray(requesterRoles)
-      ? requesterRoles.map((role) => String(role))
-      : [];
-    const emojiRegex =
-      /[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/u;
-    const rolesWithoutEmojis = roles.filter(
-      (role: string) => !emojiRegex.test(role)
-    );
+    const parsedRoles = getParsedRequesterRoles(requesterRoles as string[]);
 
-    childLogger.info("Obteniendo todos los servidores", {
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "getAllServersController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
+
+    childLogger.info("Getting all servers", {
       filename: "service.ts",
       func: "getAllServersController",
     });
 
     const userSql = `
       SELECT
-        is_admin as isAdmin
-      FROM users
-      WHERE id = ?;
+        u.is_admin as isAdmin
+      FROM users u
+      WHERE u.id = ?;
     `;
     const { result: userResult } = await executeQuery(
       userSql,
@@ -59,8 +69,7 @@ export const getAllServersController = async (req: Request, res: Response) => {
       WHERE s.status != 'DELETED'
       ORDER BY s.created_at ASC;
     `;
-
-    const normalSql = `
+    let normalSql = `
       SELECT
         s.id,
         s.name,
@@ -72,9 +81,9 @@ export const getAllServersController = async (req: Request, res: Response) => {
       WHERE
         s.status != 'DELETED'
         AND s.creator_id = ?
-      ${
-        rolesWithoutEmojis.length > 0
-          ? `
+    `;
+    if (parsedRoles.length > 0) {
+      normalSql += `
             UNION
               SELECT
               s.id,
@@ -86,18 +95,18 @@ export const getAllServersController = async (req: Request, res: Response) => {
             FROM servers s
             WHERE
               s.status != 'DELETED'
-              AND s.role_name IN (${rolesWithoutEmojis
+              AND s.role_name IN (${parsedRoles
                 .map((role) => `'${role}'`)
-                .join(", ")});
-              `
-          : ""
-      }
-    `;
+                .join(", ")})
+              `;
+    }
+    normalSql += "ORDER BY s.created_at ASC;";
+
     const sql = isAdmin ? adminSql : normalSql;
     const values = isAdmin ? [] : [requesterId];
     const { result } = await executeQuery(sql, values, serverManagerPool);
 
-    childLogger.info("Servidores obtenidos correctamente", {
+    childLogger.info("Servers gotten successfully", {
       filename: "service.ts",
       func: "getAllServersController",
     });
@@ -105,7 +114,7 @@ export const getAllServersController = async (req: Request, res: Response) => {
     const response = {
       requestId,
       statusCode: 200,
-      message: "Servidores obtenidos correctamente",
+      message: "Servers gotten successfully",
       payload: {
         items: result,
         total: result.length,
@@ -113,22 +122,254 @@ export const getAllServersController = async (req: Request, res: Response) => {
     };
 
     res.status(200).json(response);
-  } catch (error) {
-    childLogger.error(`Error al obtener los servidores: ${error}`, {
+  } catch (error: any) {
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+    childLogger.error(`Error while getting all servers`, {
       filename: "service.ts",
       func: "getAllServersController",
+      extra: { error: message },
+    });
+    const response = {
+      requestId,
+      statusCode: statusCode || 500,
+      message: message || "Internal server error",
+      payload: {
+        error: specificMessage,
+      },
+    };
+    res.status(statusCode || 500).json(response);
+  }
+};
+
+export const createServerController = async (req: Request, res: Response) => {
+  const requestId = uuidv4();
+  const childLogger = logger.child({
+    extra: { requestId },
+  });
+  let connection;
+
+  try {
+    connection = await serverManagerPool.getConnection();
+    connection.beginTransaction();
+    const {
+      body: { requesterId, requesterUser, serverProperties = {} },
+    } = req;
+
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "createServerController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
+
+    const userSql = `
+      SELECT
+        u.id as userId,
+        u.username
+      FROM users u
+      WHERE u.id = ?;
+    `;
+    const { result: userResult } = await executeQuery(
+      userSql,
+      [requesterId],
+      serverManagerPool
+    );
+    if (userResult.length === 0) {
+      childLogger.info("User not found", {
+        filename: "service.ts",
+        func: "createServerController",
+      });
+      const response = {
+        requestId,
+        statusCode: 404,
+        message: "Not authorized",
+        payload: {
+          requesterId,
+        },
+      };
+      const notFoundLogSql = `
+        INSERT INTO server_logs (request_id, server_id, username, action, status)
+        VALUES (?, ?, ?, ?, ?);
+      `;
+      connection.execute(notFoundLogSql, [
+        requestId,
+        requesterId,
+        requesterUser,
+        "create-server",
+        "FAILED",
+      ]);
+
+      connection.commit();
+      res.status(404).json(response);
+      return;
+    }
+
+    const [{ username = "" } = {}] = userResult || [];
+    const userWorldSql = `
+      SELECT COUNT(*) as count
+      FROM servers s
+      WHERE
+        s.creator_id = ?
+        AND s.status != 'DELETED';
+    `;
+    const { result: userWorld } = await executeQuery(
+      userWorldSql,
+      [requesterId],
+      serverManagerPool
+    );
+    const [{ count: userWorldCount }] = userWorld;
+    if (userWorldCount > 2) {
+      childLogger.info("User has reached the world limit", {
+        filename: "service.ts",
+        func: "createServerController",
+      });
+      const response = {
+        requestId,
+        statusCode: 409,
+        message: "User has reached the world limit",
+        payload: {
+          requesterId,
+        },
+      };
+      const limitLogSql = `
+        INSERT INTO server_logs (request_id, server_id, username, action, status)
+        VALUES (?, ?, ?, ?, ?);
+      `;
+      connection.execute(limitLogSql, [
+        requestId,
+        requesterId,
+        username,
+        "create-server",
+        "FAILED",
+      ]);
+      connection.commit();
+      res.status(409).json(response);
+      return;
+    }
+
+    childLogger.info("Creating Minecraft Server", {
+      filename: "service.ts",
+      func: "createServerController",
+    });
+
+    const portSql = `
+      SELECT s.port
+      FROM servers s
+      WHERE s.status != 'DELETED'
+      ORDER BY s.port ASC;
+    `;
+    const { result: portResult } = await executeQuery(
+      portSql,
+      [],
+      serverManagerPool
+    );
+    const newPort = getNewPort(
+      portResult.length === 0
+        ? []
+        : portResult.map((port: Record<string, number>) => port.port)
+    );
+
+    childLogger.info(`Port assigned ${newPort}`, {
+      filename: "service.ts",
+      func: "createServerController",
+    });
+
+    const serverId = await createContainer(newPort, serverProperties);
+
+    childLogger.info(`Minecraft server created with ID ${serverId}`, {
+      filename: "service.ts",
+      func: "createServerController",
+    });
+
+    const insertSql = `
+      INSERT INTO servers (id, name, version, port, status, volume_path, creator_id)
+      VALUES (?, ?, ?, ?, 'DOWN', ?, ?);
+    `;
+    const { serverName = "world", version = "LATEST" } = serverProperties || {};
+    const serverPath = `${dockerData}/servers/minecraft-${newPort}`;
+    const values = [
+      serverId,
+      serverName,
+      version,
+      newPort,
+      serverPath,
+      requesterId,
+    ];
+    await executeQuery(insertSql, values, serverManagerPool);
+
+    const logSQl = `
+      INSERT INTO server_logs (request_id, server_id, username, action, status)
+      VALUES (?, ?, ?, ?, ?);
+    `;
+    connection.execute(logSQl, [
+      requestId,
+      serverId,
+      username,
+      "create-server",
+      "SUCCESS",
+    ]);
+
+    childLogger.info("Minecraft server saved in database", {
+      filename: "service.ts",
+      func: "createServerController",
+    });
+
+    const job = await addTaskToQueue(
+      { serverId, requestId, date: Date.now() },
+      "server"
+    );
+    childLogger.info(`Enqueued task with ID: ${job}`, {
+      filename: "service.ts",
+      func: "createServerController",
     });
 
     const response = {
       requestId,
-      statusCode: 500,
-      message: "Error al obtener los servidores",
+      statusCode: 200,
+      message: "Minecraft server created successfully",
       payload: {
-        error,
+        serverId,
+        jobId: job,
       },
     };
 
-    res.status(500).json(response);
+    connection.commit();
+    res.status(200).json(response);
+  } catch (error: any) {
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+
+    childLogger.error(`Error while creating a Minecraft Server`, {
+      filename: "service.ts",
+      func: "createServerController",
+      extra: {
+        error: message,
+      },
+    });
+
+    const response = {
+      requestId,
+      statusCode: statusCode || 500,
+      message: message || "Internal Server Error",
+      payload: {
+        error: specificMessage,
+      },
+    };
+
+    if (connection) {
+      connection.rollback();
+    }
+    res.status(statusCode || 500).json(response);
   }
 };
 
@@ -142,7 +383,18 @@ export const getServerInfoController = async (req: Request, res: Response) => {
     const {
       params: { serverId },
     } = req;
-    childLogger.info(`Obteniendo estado del servidor con ID: ${serverId}`, {
+
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "getServerInfoController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
+
+    childLogger.info(`Getting server status with ID: ${serverId}`, {
       filename: "service.ts",
       func: "getServerStatusController",
     });
@@ -169,39 +421,45 @@ export const getServerInfoController = async (req: Request, res: Response) => {
     );
     const [info] = infoResult;
 
-    const serverStatus = await checkStatusContainer(serverId);
-
     const response = {
       requestId,
       statusCode: 200,
-      message: "Estado del servidor obtenido correctamente",
+      message: "Server status gotten successfully",
       payload: {
-        status: serverStatus.Running,
         ...info,
       },
     };
 
     res.status(200).json(response);
-  } catch (error) {
-    childLogger.error(`Error al obtener el estado del servidor: ${error}`, {
+  } catch (error: any) {
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+    childLogger.error(`Error while getting server status`, {
       filename: "service.ts",
       func: "getServerStatusController",
+      extra: {
+        error: message,
+      },
     });
-
     const response = {
       requestId,
-      statusCode: 500,
-      message: "Error al obtener el estado del servidor",
+      statusCode: statusCode || 500,
+      message: message || "Internal Server Error",
       payload: {
-        error,
+        error: specificMessage,
       },
     };
-
-    res.status(500).json(response);
+    res.status(statusCode || 500).json(response);
   }
 };
 
-export const updateServerController = async (req: Request, res: Response) => {
+export const updateServerInfoController = async (
+  req: Request,
+  res: Response
+) => {
   const requestId = uuidv4();
   const childLogger = logger.child({
     extra: { requestId },
@@ -218,33 +476,39 @@ export const updateServerController = async (req: Request, res: Response) => {
 
     childLogger.debug("Received", {
       filename: "service.ts",
-      func: "updateServerController",
-      extra: req.body,
+      func: "updateServerInfoController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
     });
 
     const roleServerSql = `
       SELECT
         s.creator_id as creatorId
       FROM servers s
-      WHERE id = ?;
+      WHERE s.id = ?;
     `;
     const { result: roleServerResult } = await executeQuery(
       roleServerSql,
       [serverId],
       serverManagerPool
     );
-    const [{ creatorId }] = roleServerResult;
+    const [{ creatorId = "" } = {}] = roleServerResult || [];
+
+    console.log("creatorId", creatorId, requesterId);
 
     if (requesterId !== creatorId) {
-      childLogger.info("Usuario no autorizado", {
+      childLogger.info("Not authorized", {
         filename: "service.ts",
-        func: "updateServerController",
+        func: "updateServerInfoController",
       });
 
       const response = {
         requestId,
         statusCode: 403,
-        message: "Solo el creador puede modificar el rol del mundo.",
+        message: "Only the creator can update the server.",
         payload: {},
       };
 
@@ -265,9 +529,9 @@ export const updateServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Actualizando servidor con ID: ${serverId}`, {
+    childLogger.info(`Updating server with ID: ${serverId}`, {
       filename: "service.ts",
-      func: "deleteServerController",
+      func: "updateServerInfoController",
     });
 
     const updateSql = `
@@ -290,264 +554,38 @@ export const updateServerController = async (req: Request, res: Response) => {
       "SUCCESS",
     ]);
 
+    connection.commit();
+
     const response = {
       requestId,
       statusCode: 200,
-      message: "Rol del servidor actualizado correctamente",
+      message: "Server updated successfully",
       payload: {},
     };
-
-    connection.commit();
     res.status(200).json(response);
   } catch (error: any) {
-    childLogger.error(`Error al actualizar el servidor: ${error}`, {
-      filename: "service.ts",
-      func: "updateServer",
-    });
+    if (connection) {
+      connection.rollback();
+    }
 
     const {
       message,
       statusCode,
       json: { message: specificMessage } = {},
     } = error;
-
+    childLogger.error(`Error while updating server`, {
+      filename: "service.ts",
+      func: "updateServerInfoController",
+      extra: { error: message },
+    });
     const response = {
       requestId,
       statusCode: statusCode || 500,
-      message: message || "Error al actualizar el servidor",
+      message: message || "Internal Server Error",
       payload: {
         error: specificMessage,
       },
     };
-
-    if (connection) {
-      connection.rollback();
-    }
-
-    res.status(statusCode || 500).json(response);
-  }
-};
-
-export const createServerController = async (req: Request, res: Response) => {
-  const requestId = uuidv4();
-  const childLogger = logger.child({
-    extra: { requestId },
-  });
-  let connection;
-
-  try {
-    connection = await serverManagerPool.getConnection();
-    connection.beginTransaction();
-    const {
-      body: {
-        worldName = "world",
-        version = "LATEST",
-        motd = "A simple server",
-        requesterId,
-        requesterUser,
-      },
-    } = req;
-
-    childLogger.debug("Received", {
-      filename: "service.ts",
-      func: "createServerController",
-      extra: req.body,
-    });
-
-    const userSql = `
-      SELECT
-        id as userId,
-        username
-      FROM users
-      WHERE id = ?;
-    `;
-    const { result: userResult } = await executeQuery(
-      userSql,
-      [requesterId],
-      serverManagerPool
-    );
-    if (userResult.length === 0) {
-      childLogger.info("Usuario no encontrado", {
-        filename: "service.ts",
-        func: "createServerController",
-      });
-      const response = {
-        requestId,
-        statusCode: 404,
-        message: "No tienes permisos para crear un servidor.",
-        payload: {
-          requesterId,
-        },
-      };
-      const notFoundLogSql = `
-        INSERT INTO server_logs (request_id, server_id, username, action, status)
-        VALUES (?, ?, ?, ?, ?);
-      `;
-      connection.execute(notFoundLogSql, [
-        requestId,
-        requesterId,
-        requesterUser,
-        "create-server",
-        "FAILED",
-      ]);
-
-      connection.commit();
-      res.status(404).json(response);
-      return;
-    }
-    const [{ username }] = userResult;
-
-    const userWorldSql = `
-      SELECT COUNT(*) as count
-      FROM servers
-      WHERE
-        creator_id = ?
-        AND status != 'DELETED';
-    `;
-    const { result: userWorld } = await executeQuery(
-      userWorldSql,
-      [requesterId],
-      serverManagerPool
-    );
-    const [{ count: userWorldCount }] = userWorld;
-    if (userWorldCount > 5) {
-      childLogger.info("Usuario ya tiene un mundo", {
-        filename: "service.ts",
-        func: "createServerController",
-      });
-      const response = {
-        requestId,
-        statusCode: 409,
-        message: "El usuario ya superó el límite de mundos.",
-        payload: {
-          requesterId,
-        },
-      };
-
-      const limitLogSql = `
-        INSERT INTO server_logs (request_id, server_id, username, action, status)
-        VALUES (?, ?, ?, ?, ?);
-      `;
-      connection.execute(limitLogSql, [
-        requestId,
-        requesterId,
-        username,
-        "create-server",
-        "FAILED",
-      ]);
-
-      connection.commit();
-      res.status(409).json(response);
-      return;
-    }
-
-    childLogger.info("Creando servidor de Minecraft", {
-      filename: "service.ts",
-      func: "createServerController",
-    });
-
-    const portSql = `
-      SELECT s.port
-      FROM servers s
-      WHERE status != 'DELETED'
-      ORDER BY s.port ASC;
-    `;
-    const { result: portResult } = await executeQuery(
-      portSql,
-      [],
-      serverManagerPool
-    );
-    const newPort = getNewPort(
-      portResult.length === 0
-        ? []
-        : portResult.map((port: Record<string, unknown>) => port.port)
-    );
-
-    childLogger.info(`Puerto asignado ${newPort}`, {
-      filename: "service.ts",
-      func: "createServerController",
-    });
-
-    const serverId = await createContainer(version, newPort, {
-      motd,
-      maxPlayers: 20,
-      difficulty: "easy",
-      worldName,
-    });
-
-    childLogger.info(`Servidor Minecraft creado con id ${serverId}`, {
-      filename: "service.ts",
-      func: "createServerController",
-    });
-
-    const insertSql = `
-      INSERT INTO servers (id, name, version, port, status, creator_id)
-      VALUES (?, ?, ?, ?, 'DOWN', ?);
-    `;
-    const values = [serverId, worldName, version, newPort, requesterId];
-    await executeQuery(insertSql, values, serverManagerPool);
-
-    const logSQl = `
-      INSERT INTO server_logs (request_id, server_id, username, action, status)
-      VALUES (?, ?, ?, ?, ?);
-    `;
-    connection.execute(logSQl, [
-      requestId,
-      serverId,
-      username,
-      "create-server",
-      "SUCCESS",
-    ]);
-
-    childLogger.info(`Servidor guardado en la base de datos`, {
-      filename: "service.ts",
-      func: "createServerController",
-    });
-
-    const job = await addTaskToQueue(
-      { serverId, requestId, date: Date.now() },
-      "server"
-    );
-    childLogger.info(`Tarea agregada a la cola con ID: ${job}`, {
-      filename: "service.ts",
-      func: "createServerController",
-    });
-
-    const response = {
-      requestId,
-      statusCode: 201,
-      message: "Servidor de Minecraft creado correctamente.",
-      payload: {
-        serverId,
-        jobId: job,
-      },
-    };
-
-    connection.commit();
-    res.status(201).json(response);
-  } catch (error: any) {
-    childLogger.error(`Error al crear el servidor de Minecraft: ${error}`, {
-      filename: "service.ts",
-      func: "createServerController",
-    });
-    const {
-      message,
-      statusCode,
-      json: { message: specificMessage } = {},
-    } = error;
-
-    const response = {
-      requestId,
-      statusCode: statusCode || 500,
-      message: message || "Error al crear el servidor de Minecraft.",
-      payload: {
-        error: specificMessage,
-      },
-    };
-
-    if (connection) {
-      connection.rollback();
-    }
     res.status(statusCode || 500).json(response);
   }
 };
@@ -567,12 +605,22 @@ export const deleteServerController = async (req: Request, res: Response) => {
       body: { requesterId, requesterUser },
     } = req;
 
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "deleteServerController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
+
     const roleServerSql = `
       SELECT
         s.status,
         s.creator_id as creatorId
       FROM servers s
-      WHERE id = ?;
+      WHERE s.id = ?;
     `;
     const { result: roleServerResult } = await executeQuery(
       roleServerSql,
@@ -580,9 +628,8 @@ export const deleteServerController = async (req: Request, res: Response) => {
       serverManagerPool
     );
     const [{ creatorId, status }] = roleServerResult;
-
     if (requesterId !== creatorId) {
-      childLogger.info("Usuario no autorizado", {
+      childLogger.info("Not authorized", {
         filename: "service.ts",
         func: "deleteServerController",
       });
@@ -590,7 +637,7 @@ export const deleteServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 403,
-        message: "Solo el creador puede eliminar el mundo.",
+        message: "Only the creator can delete the server.",
         payload: {},
       };
 
@@ -611,44 +658,12 @@ export const deleteServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    if (status === "INITIALIZING" || status === "READY") {
-      childLogger.info("Servidor en proceso de inicialización", {
-        filename: "service.ts",
-        func: "deleteServerController",
-      });
-
-      const response = {
-        requestId,
-        statusCode: 409,
-        message: "El servidor está corriendo en este momento.",
-        payload: {},
-      };
-
-      const initializingLogSql = `
-        INSERT INTO server_logs (request_id, server_id, username, action, status)
-        VALUES (?, ?, ?, ?, ?);
-      `;
-      connection.execute(initializingLogSql, [
-        requestId,
-        serverId,
-        requesterUser,
-        "delete-server",
-        "FAILED",
-      ]);
-
-      connection.commit();
-      res.status(409).json(response);
-      return;
-    }
-
-    childLogger.info(`Eliminando servidor con ID: ${serverId}`, {
+    childLogger.info(`Deleting server with ID: ${serverId}`, {
       filename: "service.ts",
       func: "deleteServerController",
     });
-
     await deleteContainer(serverId);
-
-    childLogger.info(`Servidor de Minecraft eliminado correctamente`, {
+    childLogger.info("Minecraft server deleted successfully", {
       filename: "service.ts",
       func: "deleteServerController",
     });
@@ -675,17 +690,15 @@ export const deleteServerController = async (req: Request, res: Response) => {
     const response = {
       requestId,
       statusCode: 200,
-      message: "Servidor de Minecraft eliminado correctamente",
+      message: "Server deleted successfully",
       payload: {},
     };
-
     await connection.commit();
     res.status(200).json(response);
   } catch (error: any) {
-    childLogger.error(`Error al eliminar el servidor de Minecraft: ${error}`, {
-      filename: "service.ts",
-      func: "deleteServerController",
-    });
+    if (connection) {
+      connection.rollback();
+    }
 
     const {
       message,
@@ -693,19 +706,20 @@ export const deleteServerController = async (req: Request, res: Response) => {
       json: { message: specificMessage } = {},
     } = error;
 
+    childLogger.error("Error while deleting Minecraft Server", {
+      filename: "service.ts",
+      func: "deleteServerController",
+      extra: { error: message },
+    });
+
     const response = {
       requestId,
       statusCode: statusCode || 500,
-      message: message || "Error al eliminar el servidor de Minecraft",
+      message: message || "Internal Server Error",
       payload: {
         error: specificMessage,
       },
     };
-
-    if (connection) {
-      connection.rollback();
-    }
-
     res.status(statusCode || 500).json(response);
   }
 };
@@ -722,17 +736,27 @@ export const startServerController = async (req: Request, res: Response) => {
     connection.beginTransaction();
     const {
       params: { serverId },
-      body: { requesterRoles, requesterId },
+      body: { requesterId = "", requesterRoles = [] },
     } = req;
+
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "startServerController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
 
     const roleServerSql = `
       SELECT
-        name,
-        status,
-        role_name as roleName,
-        creator_id as creatorId
-      FROM servers
-      WHERE id = ?;
+        s.name,
+        s.status,
+        s.role_name as roleName,
+        s.creator_id as creatorId
+      FROM servers s
+      WHERE s.id = ?;
     `;
     const { result: roleServerResult } = await executeQuery(
       roleServerSql,
@@ -742,7 +766,7 @@ export const startServerController = async (req: Request, res: Response) => {
     const [{ roleName, creatorId, name, status }] = roleServerResult;
 
     if (status === "INITIALIZING" || status === "READY") {
-      childLogger.info("Servidor en proceso de inicialización o listo", {
+      childLogger.info("Server is already running or initializing", {
         filename: "service.ts",
         func: "startServerController",
       });
@@ -750,7 +774,7 @@ export const startServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 409,
-        message: "El servidor está en proceso de inicialización o listo.",
+        message: "Server is already running or initializing.",
         payload: {},
       };
 
@@ -771,17 +795,17 @@ export const startServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Rol del servidor ${roleName}`, {
+    childLogger.info(`Server role ${roleName}`, {
       filename: "service.ts",
       func: "startServerController",
     });
 
-    const hasRole = roleName
-      ? requesterRoles.some((role: string) => role === roleName)
-      : false;
+    const parsedRoles = getParsedRequesterRoles(requesterRoles as string[]);
+
+    const hasRole = parsedRoles.some((role: string) => role === roleName);
 
     if (!hasRole && requesterId !== creatorId) {
-      childLogger.info("Usuario no autorizado", {
+      childLogger.info("Not authorized", {
         filename: "service.ts",
         func: "startServerController",
       });
@@ -789,7 +813,7 @@ export const startServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 403,
-        message: "Usuario no autorizado para iniciar el servidor.",
+        message: "User not authorized to start the server",
         payload: {},
       };
 
@@ -810,13 +834,9 @@ export const startServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Iniciando servidor con ID: ${serverId}`, {
+    childLogger.info(`Starting server with ID: ${serverId}`, {
       filename: "service.ts",
       func: "startServerController",
-      extra: {
-        params: req.params,
-        body: req.body,
-      },
     });
 
     const jobId = await addTaskToQueue(
@@ -824,7 +844,7 @@ export const startServerController = async (req: Request, res: Response) => {
       "server"
     );
 
-    childLogger.info(`Tarea agregada a la cola con ID: ${jobId}`, {
+    childLogger.info(`Enqueued task with ID: ${jobId}`, {
       filename: "service.ts",
       func: "startServerController",
     });
@@ -843,27 +863,32 @@ export const startServerController = async (req: Request, res: Response) => {
 
     const response = {
       requestId,
-      statusCode: 201,
-      message: "Servidor de Minecraft iniciado correctamente",
+      statusCode: 200,
+      message: "Server started successfully",
       payload: {
         jobId,
-        worldName: name,
+        serverName: name,
       },
     };
 
     connection.commit();
-    res.status(201).json(response);
+    res.status(200).json(response);
   } catch (error: any) {
-    childLogger.error(`Error al iniciar el servidor de Minecraft: ${error}`, {
-      filename: "service.ts",
-      func: "startServerController",
-    });
+    if (connection) {
+      connection.rollback();
+    }
 
     const {
       message,
       statusCode,
       json: { message: specificMessage } = {},
     } = error;
+
+    childLogger.error(`Error al iniciar el servidor de Minecraft: ${error}`, {
+      filename: "service.ts",
+      func: "startServerController",
+      extra: { error: message },
+    });
 
     const response = {
       requestId,
@@ -873,10 +898,6 @@ export const startServerController = async (req: Request, res: Response) => {
         error: specificMessage,
       },
     };
-
-    if (connection) {
-      connection.rollback();
-    }
 
     res.status(statusCode || 500).json(response);
   }
@@ -894,8 +915,18 @@ export const stopServerController = async (req: Request, res: Response) => {
     connection.beginTransaction();
     const {
       params: { serverId },
-      body: { requesterRoles, requesterId },
+      body: { requesterId = "", requesterRoles = [] },
     } = req;
+
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "stopServerController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
 
     const roleServerSql = `
       SELECT
@@ -912,9 +943,8 @@ export const stopServerController = async (req: Request, res: Response) => {
       serverManagerPool
     );
     const [{ roleName, creatorId, name, status }] = roleServerResult;
-
     if (status === "DOWN") {
-      childLogger.info("Servidor está actualmente detenido", {
+      childLogger.info("Server is already stopped", {
         filename: "service.ts",
         func: "stopServerController",
       });
@@ -922,7 +952,7 @@ export const stopServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 409,
-        message: "El servidor está actualmente detenido.",
+        message: "Server is already stopped.",
         payload: {},
       };
 
@@ -943,17 +973,18 @@ export const stopServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Rol del servidor ${roleName}`, {
+    childLogger.info(`Server role ${roleName}`, {
       filename: "service.ts",
       func: "stopServerController",
     });
 
-    const hasRole = roleName
-      ? requesterRoles.some((role: string) => role === roleName)
-      : false;
+    const parsedRoles = getParsedRequesterRoles(requesterRoles as string[]);
+    const hasRole = parsedRoles.some((role: string) => role === roleName);
+
+    console.log("hasRole", hasRole);
 
     if (!hasRole && requesterId !== creatorId) {
-      childLogger.info("Usuario no autorizado", {
+      childLogger.info("Not authorized", {
         filename: "service.ts",
         func: "stopServerController",
       });
@@ -961,7 +992,7 @@ export const stopServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 403,
-        message: "Usuario no autorizado para detener el servidor.",
+        message: "User not authorized to stop the server",
         payload: {
           wordlName: name,
         },
@@ -984,18 +1015,12 @@ export const stopServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Deteniendo servidor con ID: ${serverId}`, {
+    childLogger.info(`Stopping server with ID: ${serverId}`, {
       filename: "service.ts",
       func: "stopServerController",
-      extra: {
-        params: req.params,
-        body: req.body,
-      },
     });
-
     await stopContainer(serverId);
-
-    childLogger.info(`Servidor de Minecraft detenido correctamente`, {
+    childLogger.info(`Server stopped successfully`, {
       filename: "service.ts",
       func: "stopServerController",
     });
@@ -1022,20 +1047,19 @@ export const stopServerController = async (req: Request, res: Response) => {
 
     const response = {
       requestId,
-      statusCode: 201,
-      message: "Servidor de Minecraft detenido correctamente",
+      statusCode: 200,
+      message: "Server stopped successfully",
       payload: {
-        worldName: name,
+        serverName: name,
       },
     };
 
     connection.commit();
-    res.status(201).json(response);
+    res.status(200).json(response);
   } catch (error: any) {
-    childLogger.error(`Error al detener el servidor de Minecraft: ${error}`, {
-      filename: "service.ts",
-      func: "stopServerController",
-    });
+    if (connection) {
+      connection.rollback();
+    }
 
     const {
       message,
@@ -1043,19 +1067,20 @@ export const stopServerController = async (req: Request, res: Response) => {
       json: { message: specificMessage } = {},
     } = error;
 
+    childLogger.error("Error while stopping server", {
+      filename: "service.ts",
+      func: "stopServerController",
+      extra: { error: message },
+    });
+
     const response = {
       requestId,
       statusCode: statusCode || 500,
-      message: message || "Error al detener el servidor de Minecraft",
+      message: message || "Internal Server Error",
       payload: {
         error: specificMessage,
       },
     };
-
-    if (connection) {
-      connection.rollback();
-    }
-
     res.status(statusCode || 500).json(response);
   }
 };
@@ -1075,6 +1100,16 @@ export const restartServerController = async (req: Request, res: Response) => {
       body: { requesterRoles, requesterId },
     } = req;
 
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "restartServerController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
+
     const roleServerSql = `
       SELECT
         s.name,
@@ -1089,49 +1124,18 @@ export const restartServerController = async (req: Request, res: Response) => {
       [serverId],
       serverManagerPool
     );
-    const [{ roleName, creatorId, name, status }] = roleServerResult;
+    const [{ roleName, creatorId, name }] = roleServerResult;
 
-    if (status === "DOWN") {
-      childLogger.info("Servidor está actualmente detenido", {
-        filename: "service.ts",
-        func: "restartServerController",
-      });
-
-      const response = {
-        requestId,
-        statusCode: 409,
-        message: "El servidor está actualmente detenido.",
-        payload: {},
-      };
-
-      const initializingLogSql = `
-        INSERT INTO server_logs (request_id, server_id, username, action, status)
-        VALUES (?, ?, ?, ?, ?);
-      `;
-      connection.execute(initializingLogSql, [
-        requestId,
-        serverId,
-        requesterId,
-        "restart-server",
-        "FAILED",
-      ]);
-
-      connection.commit();
-      res.status(409).json(response);
-      return;
-    }
-
-    childLogger.info(`Rol del servidor ${roleName}`, {
+    childLogger.info(`Server role ${roleName}`, {
       filename: "service.ts",
       func: "restartServerController",
     });
 
-    const hasRole = roleName
-      ? requesterRoles.some((role: string) => role === roleName)
-      : false;
+    const parsedRoles = getParsedRequesterRoles(requesterRoles as string[]);
+    const hasRole = parsedRoles.some((role: string) => role === roleName);
 
     if (!hasRole && requesterId !== creatorId) {
-      childLogger.info("Usuario no autorizado", {
+      childLogger.info("Not authorized", {
         filename: "service.ts",
         func: "restartServerController",
       });
@@ -1139,7 +1143,7 @@ export const restartServerController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 403,
-        message: "Usuario no autorizado para reiniciar el servidor.",
+        message: "User not authorized to restart the server",
         payload: {
           wordlName: name,
         },
@@ -1162,22 +1166,16 @@ export const restartServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Reiniciando servidor con ID: ${serverId}`, {
+    childLogger.info(`Restarting server with ID: ${serverId}`, {
       filename: "service.ts",
       func: "restartServerController",
-      extra: {
-        params: req.params,
-        body: req.body,
-      },
     });
-
     await stopContainer(serverId);
     const jobId = await addTaskToQueue(
       { serverId, requestId, date: Date.now() },
       "server"
     );
-
-    childLogger.info(`Tarea agregada a la cola con ID: ${jobId}`, {
+    childLogger.info(`Enqueued task with ID: ${jobId}`, {
       filename: "service.ts",
       func: "startServerController",
     });
@@ -1196,21 +1194,20 @@ export const restartServerController = async (req: Request, res: Response) => {
 
     const response = {
       requestId,
-      statusCode: 201,
-      message: "Servidor de Minecraft iniciado correctamente",
+      statusCode: 200,
+      message: "Server restarted successfully",
       payload: {
         jobId,
-        worldName: name,
+        serverName: name,
       },
     };
 
     connection.commit();
-    res.status(201).json(response);
+    res.status(200).json(response);
   } catch (error: any) {
-    childLogger.error(`Error al reiniciar el servidor de Minecraft: ${error}`, {
-      filename: "service.ts",
-      func: "restartServerController",
-    });
+    if (connection) {
+      connection.rollback();
+    }
 
     const {
       message,
@@ -1218,18 +1215,20 @@ export const restartServerController = async (req: Request, res: Response) => {
       json: { message: specificMessage } = {},
     } = error;
 
+    childLogger.error(`Error while restarting Minecraft Server`, {
+      filename: "service.ts",
+      func: "restartServerController",
+      extra: { error: message },
+    });
+
     const response = {
       requestId,
       statusCode: statusCode || 500,
-      message: message || "Error al reiniciar el servidor de Minecraft",
+      message: message || "Internal Server Error",
       payload: {
         error: specificMessage,
       },
     };
-
-    if (connection) {
-      connection.rollback();
-    }
 
     res.status(statusCode || 500).json(response);
   }
@@ -1245,7 +1244,7 @@ export const getTaskStatusController = async (req: Request, res: Response) => {
     const {
       params: { jobId },
     } = req;
-    childLogger.info(`Obteniendo estado del servidor con ID: ${jobId}`, {
+    childLogger.info(`Get status of task with ID: ${jobId}`, {
       filename: "service.ts",
       func: "getServerStatusController",
     });
@@ -1253,7 +1252,7 @@ export const getTaskStatusController = async (req: Request, res: Response) => {
     const job = await getTaskStatus(jobId, "server");
 
     if (!job || job.status === "failed") {
-      childLogger.info(`Tarea con ID ${jobId} no encontrada`, {
+      childLogger.info(`Task with ${jobId} not found`, {
         filename: "service.ts",
         func: "getServerStatusController",
       });
@@ -1261,7 +1260,7 @@ export const getTaskStatusController = async (req: Request, res: Response) => {
       const response = {
         requestId,
         statusCode: 404,
-        message: "Tarea no encontrada",
+        message: "Task not found",
         payload: {
           jobId,
         },
@@ -1271,7 +1270,7 @@ export const getTaskStatusController = async (req: Request, res: Response) => {
       return;
     }
 
-    childLogger.info(`Estado del servidor obtenido ${job?.status}`, {
+    childLogger.info(`Task status ${job?.status}`, {
       filename: "service.ts",
       func: "getServerStatusController",
     });
@@ -1279,28 +1278,121 @@ export const getTaskStatusController = async (req: Request, res: Response) => {
     const response = {
       requestId,
       statusCode: 200,
-      message: "Estado del servidor obtenido correctamente",
+      message: "Task status gotten successfully",
       payload: {
         ...job,
       },
     };
 
     res.status(200).json(response);
-  } catch (error) {
-    childLogger.error(`Error al obtener el estado del servidor: ${error}`, {
+  } catch (error: any) {
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+
+    childLogger.error(`Error while getting task status`, {
       filename: "service.ts",
       func: "getServerStatusController",
+      extra: {
+        error: message,
+      },
     });
 
     const response = {
       requestId,
-      statusCode: 500,
-      message: "Error al obtener el estado del servidor",
+      statusCode: statusCode || 500,
+      message: message || "Internal Server Error",
       payload: {
-        error,
+        error: specificMessage,
       },
     };
 
-    res.status(500).json(response);
+    res.status(statusCode || 500).json(response);
+  }
+};
+
+export const getServerPropertiesController = async (
+  req: Request,
+  res: Response
+) => {
+  const requestId = uuidv4();
+  const childLogger = logger.child({
+    extra: { requestId },
+  });
+
+  try {
+    const {
+      params: { serverId },
+    } = req;
+
+    childLogger.debug("Received", {
+      filename: "service.ts",
+      func: "getServerPropertiesController",
+      extra: {
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      },
+    });
+
+    childLogger.info(`Getting server properties with ID: ${serverId}`, {
+      filename: "service.ts",
+      func: "getServerStatusController",
+    });
+
+    const infoSql = `
+      SELECT
+        s.port
+      FROM servers s
+      WHERE s.id = ?;
+    `;
+    const { result: infoResult } = await executeQuery(
+      infoSql,
+      [serverId],
+      serverManagerPool
+    );
+    const [{ port } = {}] = infoResult || [];
+
+    const serverPath = `${dockerData}/servers/minecraft-${port}`;
+    const propertiesPath = `${serverPath}/server.properties`;
+    const properties = parseMinecraftProperties(propertiesPath);
+
+    const response = {
+      requestId,
+      statusCode: 200,
+      message: "Server properties gotten successfully",
+      payload: {
+        ...properties,
+      },
+    };
+
+    res.status(200).json(response);
+  } catch (error: any) {
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+
+    childLogger.error(`Error while getting server properties`, {
+      filename: "service.ts",
+      func: "getServerPropertiesController",
+      extra: {
+        error: message,
+      },
+    });
+
+    const response = {
+      requestId,
+      statusCode: statusCode || 500,
+      message: message || "Internal Server Error",
+      payload: {
+        error: specificMessage,
+      },
+    };
+
+    res.status(statusCode || 500).json(response);
   }
 };

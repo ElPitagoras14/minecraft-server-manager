@@ -4,25 +4,67 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export const fields: FieldInfo[] = [
-  {
-    name: "serverName",
-    label: "Name",
-    initValue: "World",
-    type: "text",
-    validation: z.string().min(1, "Name is required"),
-    create: true,
-    update: true,
-  },
-  {
-    name: "version",
-    label: "Version",
-    initValue: "",
-    type: "autocomplete",
-    validation: z.string().min(1, "Version is required"),
-    create: true,
-    update: false,
-  },
+export const startServer = async (
+  id: string,
+  token: string,
+  requesterId: string
+): Promise<void> => {
+  const dataOptions = {
+    url: `${API_URL}/server/start/${id}`,
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      requesterId,
+      requesterRoles: [],
+    },
+  };
+
+  await axios.request(dataOptions);
+};
+
+export const stopServer = async (
+  id: string,
+  token: string,
+  requesterId: string
+): Promise<void> => {
+  const dataOptions = {
+    url: `${API_URL}/server/stop/${id}`,
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      requesterId,
+      requesterRoles: [],
+    },
+  };
+
+  await axios.request(dataOptions);
+};
+
+export const restartServer = async (
+  id: string,
+  token: string,
+  requesterId: string
+): Promise<void> => {
+  const dataOptions = {
+    url: `${API_URL}/server/restart/${id}`,
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      requesterId,
+      requesterRoles: [],
+    },
+  };
+
+  await axios.request(dataOptions);
+};
+
+export const propertyFields: FieldInfo[] = [
   {
     name: "motd",
     label: "Description",
@@ -92,62 +134,14 @@ export const fields: FieldInfo[] = [
   },
 ];
 
-export const startServer = async (
-  id: string,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/start/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
-
-export const stopServer = async (
-  id: string,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/stop/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
-
-export const restartServer = async (
-  id: string,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/restart/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
+export const serverFields: FieldInfo[] = [
+  {
+    name: "roleName",
+    label: "Role",
+    initValue: "",
+    type: "text",
+    validation: z.any(),
+    create: false,
+    update: true,
+  },
+];

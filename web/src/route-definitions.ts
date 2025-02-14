@@ -16,6 +16,11 @@ const managementRoutes = [
     isMenu: false,
   },
   {
+    label: "Item",
+    url: "/management/servers/*",
+    isMenu: false,
+  },
+  {
     label: "Backups",
     url: "/management/backups",
     isMenu: false,

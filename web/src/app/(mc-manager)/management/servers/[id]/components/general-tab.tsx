@@ -1,0 +1,366 @@
+"use client";
+
+import { z } from "zod";
+import axios, { isAxiosError } from "axios";
+import { ErrorResponse, FieldInfo } from "@/utils/interfaces";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form } from "@/components/ui/form";
+import CustomField from "@/components/form-fields/custom-field";
+import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/ui/icons";
+import {
+  propertyFields,
+  restartServer,
+  serverFields,
+  startServer,
+  stopServer,
+} from "./utils";
+import LoadableButton from "@/components/loadable-button";
+import { useSession } from "next-auth/react";
+import { useErrorDialog } from "@/hooks/use-error-dialog";
+import { toast } from "@/hooks/use-toast";
+import { useParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import { Separator } from "@/components/ui/separator";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+const propertyUpdateFields = propertyFields.filter((field) => field.update);
+
+const propertyValidationSchema = z.object(
+  propertyUpdateFields.reduce(
+    (acc: Record<string, z.ZodTypeAny>, field: FieldInfo) => {
+      acc[field.name] = field.validation;
+      return acc;
+    },
+    {}
+  )
+);
+
+const serverValidationSchema = z.object(
+  serverFields.reduce((acc: Record<string, z.ZodTypeAny>, field: FieldInfo) => {
+    acc[field.name] = field.validation;
+    return acc;
+  }, {})
+);
+
+const getProperties = async (serverId: string, token: string) => {
+  const dataOptions = {
+    method: "GET",
+    url: `${API_URL}/server/properties/${serverId}`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+
+  const response = await axios.request(dataOptions);
+  const {
+    data: { payload },
+  } = response;
+
+  return payload;
+};
+
+const getData = async (serverId: string, token: string) => {
+  const dataOptions = {
+    method: "GET",
+    url: `${API_URL}/server/${serverId}`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+
+  const response = await axios.request(dataOptions);
+  const {
+    data: { payload },
+  } = response;
+
+  return payload;
+};
+
+const updateRole = async (
+  serverId: string,
+  token: string,
+  requesterId: string,
+  requesterUser: string,
+  data: z.infer<typeof serverValidationSchema>
+) => {
+  const dataOptions = {
+    method: "PUT",
+    url: `${API_URL}/server/${serverId}`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      requesterId,
+      requesterUser,
+      ...data,
+    },
+  };
+
+  await axios.request(dataOptions);
+};
+
+const propertyMap = {
+  "level-name": "serverName",
+  "max-players": "maxPlayers",
+  "view-distance": "viewDistance",
+  motd: "motd",
+  difficulty: "difficulty",
+};
+
+export default function GeneralTab() {
+  const { data: session } = useSession();
+  const { user: { token = "", id: userId = "", name: username = "" } = {} } =
+    session || {};
+
+  const { showError } = useErrorDialog();
+
+  const [data, setData] = useState<Record<string, string>>();
+  const { name, version, status, port, roleName } = data || {};
+  const [properties, setProperties] = useState<Record<string, unknown>>();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoadingRole, setIsLoadingRole] = useState<boolean>(false);
+
+  const serverInitialValues = serverFields.reduce(
+    (acc: Record<string, unknown>, field: FieldInfo) => {
+      acc[field.name] = field.initValue;
+      return acc;
+    },
+    {}
+  );
+
+  const propertyInitialValues = propertyUpdateFields.reduce(
+    (acc: Record<string, unknown>, field: FieldInfo) => {
+      acc[field.name] = field.initValue;
+      return acc;
+    },
+    {}
+  );
+
+  const propertyForm = useForm<z.infer<typeof propertyValidationSchema>>({
+    defaultValues: propertyInitialValues,
+    resolver: zodResolver(propertyValidationSchema),
+  });
+
+  const serverForm = useForm<z.infer<typeof serverValidationSchema>>({
+    defaultValues: serverInitialValues,
+    resolver: zodResolver(serverValidationSchema),
+  });
+
+  const { id } = useParams();
+
+  const handleErrorResponse = (error: unknown) => {
+    if (isAxiosError(error)) {
+      const { response: { data, status } = {} } = error;
+      if (status === 401) {
+        const { detail } = data;
+        toast({
+          variant: "destructive",
+          title: detail,
+        });
+        return;
+      } else if (data.statusCode === 404) {
+        toast({
+          title: "No se encontraron datos",
+        });
+        setData({});
+        return;
+      }
+      showError({
+        response: data as ErrorResponse,
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error desconocido",
+      });
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      const data = await getData(id as string, token);
+      setData(data);
+      const properties = await getProperties(id as string, token);
+      setProperties(properties);
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    }
+  };
+
+  const handleStartServer = async (id: string, name: string) => {
+    try {
+      await startServer(id, token, userId);
+      await loadData();
+      toast({
+        title: `Server ${name} started`,
+      });
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    } finally {
+    }
+  };
+
+  const handleStopServer = async (id: string, name: string) => {
+    try {
+      await stopServer(id, token, userId);
+      await loadData();
+      toast({
+        title: `Server ${name} stopped`,
+      });
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    }
+  };
+
+  const handleRestartServer = async (id: string, name: string) => {
+    try {
+      await restartServer(id, token, userId);
+      await loadData();
+      toast({
+        title: `Server ${name} restarted`,
+      });
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    }
+  };
+
+  const onSubmitServer = serverForm.handleSubmit(
+    async (data: z.infer<typeof serverValidationSchema>) => {
+      try {
+        setIsLoadingRole(true);
+        await updateRole(id as string, token, userId, username as string, data);
+        await loadData();
+        toast({
+          title: "Server updated",
+        });
+      } catch (error: unknown) {
+        handleErrorResponse(error);
+      } finally {
+        setIsLoadingRole(false);
+      }
+    }
+  );
+
+  useEffect(() => {
+    if (!properties) return;
+    const newInitialValues = Object.entries(properties).reduce(
+      (acc: Record<string, unknown>, [key, value]) => {
+        if (Object.hasOwn(propertyMap, key)) {
+          acc[propertyMap[key as keyof typeof propertyMap]] = value;
+        }
+        return acc;
+      },
+      {}
+    );
+    propertyForm.reset(newInitialValues);
+  }, [properties]);
+
+  useEffect(() => {
+    if (!data) return;
+    const newInitialValues = {
+      ...data,
+    };
+    serverForm.reset(newInitialValues);
+  }, [data]);
+
+  useEffect(() => {
+    if (!token || !id) return;
+    (async () => {
+      await loadData();
+    })();
+  }, [token, id]);
+  return (
+    <>
+      <div className="flex justify-between">
+        <div className="flex flex-col space-y-1">
+          <p className="text-lg font-semibold">
+            Server {name} - Ver {version}
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {status} - {port}
+          </p>
+          <div className="flex flex-row items-center space-x-2 pt-2">
+            <Button variant="secondary" onClick={async () => await loadData()}>
+              Refresh
+            </Button>
+            {status === "READY" && (
+              <LoadableButton
+                label="Stop"
+                func={async () => handleStopServer(id as string, name)}
+                classname="bg-red-500 hover:bg-red-700"
+              />
+            )}{" "}
+            {status === "DOWN" && (
+              <LoadableButton
+                label="Start"
+                func={async () => handleStartServer(id as string, name)}
+                classname="bg-green-500 hover:bg-green-700"
+              />
+            )}
+            <LoadableButton
+              label="Restart"
+              func={async () => handleRestartServer(id as string, name)}
+              classname="bg-orange-500 hover:bg-orange-700"
+            />
+          </div>
+        </div>
+        <Form {...serverForm}>
+          <form className="flex flex-row items-center space-x-2 mt-2">
+            <div className="flex flex-row items-end">
+              {serverFields.map((field) => (
+                <CustomField
+                  key={field.name}
+                  formContext={serverForm}
+                  fieldInfo={field}
+                />
+              ))}
+              <Button
+                className="ml-4"
+                type="button"
+                onClick={onSubmitServer}
+                disabled={
+                  !serverForm.formState.isDirty && serverForm.formState.isValid
+                }
+              >
+                {isLoadingRole && (
+                  <Icons.spinner className="animate-spin mr-1 h-11" />
+                )}
+                Update Role
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </div>
+      <Form {...propertyForm}>
+        <form className="mt-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 pb-4">
+            {propertyUpdateFields.map((field) => (
+              <CustomField
+                key={field.name}
+                formContext={propertyForm}
+                fieldInfo={field}
+              />
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              disabled={
+                !propertyForm.formState.isDirty &&
+                propertyForm.formState.isValid
+              }
+            >
+              {isLoading && (
+                <Icons.spinner className="animate-spin mr-1 h-11" />
+              )}
+              Save
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </>
+  );
+}

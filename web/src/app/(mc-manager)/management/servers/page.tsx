@@ -8,14 +8,15 @@ import axios, { isAxiosError } from "axios";
 import { useEffect, useState } from "react";
 import CreateDialog from "./components/create-dialog";
 import { Button } from "@/components/ui/button";
-import { Play, RotateCcw, Square } from "lucide-react";
+import { Pencil, Play, RotateCcw, Square } from "lucide-react";
 import DeleteDialog from "./components/delete-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useErrorDialog } from "@/hooks/use-error-dialog";
 import { ComboboxItem, ErrorResponse } from "@/utils/interfaces";
 import { Icons } from "@/components/ui/icons";
 import LoadableIcon from "@/components/loadable-icon";
-import UpdateDialog from "./components/update-dialog";
+import { useRouter } from "next/navigation";
+import { startServer, stopServer, restartServer } from "./components/util";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -23,46 +24,6 @@ interface ServerResponse {
   items: Server[];
   total: number;
 }
-
-const startServer = async (
-  id: number,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/start/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
-
-const stopServer = async (
-  id: number,
-  token: string,
-  requesterId: string
-): Promise<void> => {
-  const dataOptions = {
-    url: `${API_URL}/server/stop/${id}`,
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    data: {
-      requesterId,
-      requesterRoles: [],
-    },
-  };
-
-  await axios.request(dataOptions);
-};
 
 const getData = async (
   token: string,
@@ -112,6 +73,7 @@ export default function ServersPage() {
   const { user: { token = "", id: userId = "" } = {} } = session || {};
 
   const { showError } = useErrorDialog();
+  const router = useRouter();
 
   const [data, setData] = useState<ServerResponse>({
     items: [],
@@ -169,7 +131,7 @@ export default function ServersPage() {
     }
   };
 
-  const handleStartServer = async (id: number, name: string) => {
+  const handleStartServer = async (id: string, name: string) => {
     try {
       await startServer(id, token, userId);
       await loadData();
@@ -182,7 +144,7 @@ export default function ServersPage() {
     }
   };
 
-  const handleStopServer = async (id: number, name: string) => {
+  const handleStopServer = async (id: string, name: string) => {
     try {
       await stopServer(id, token, userId);
       await loadData();
@@ -194,17 +156,29 @@ export default function ServersPage() {
     }
   };
 
+  const handleRestartServer = async (id: string, name: string) => {
+    try {
+      await restartServer(id, token, userId);
+      await loadData();
+      toast({
+        title: `Server ${name} restarted`,
+      });
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    }
+  };
+
   const newColumns: CustomColumnDef<Server>[] = [
     ...columns,
     {
       id: "actions",
       label: "Actions",
-      header: "Actions",
+      header: () => <div className="text-center">Actions</div>,
       cell: ({ row }) => {
         const { original: item } = row;
         const { status, id, name } = item;
         return (
-          <div className="flex flex-row space-x-2">
+          <div className="flex flex-row space-x-2 justify-center">
             {status === "READY" && (
               <LoadableIcon
                 icon={
@@ -221,11 +195,18 @@ export default function ServersPage() {
                 icon={
                   <Play className="h-5 w-5 hover:cursor-pointer hover:text-primary" />
                 }
-                func={async () => await handleStartServer(id, name)}
+                func={async () => await handleStartServer(id as string, name)}
               />
             )}
-            <UpdateDialog item={item} updateData={loadData} />
+            <Pencil
+              onClick={() => router.push(`/management/servers/${id}`)}
+              className="h-5 w-5 hover:cursor-pointer hover:text-primary"
+            />
             <DeleteDialog item={item} updateData={loadData} />
+            <RotateCcw
+              onClick={async () => await handleRestartServer(id, name)}
+              className="h-5 w-5 hover:cursor-pointer hover:text-primary"
+            />
           </div>
         );
       },

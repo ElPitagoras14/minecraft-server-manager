@@ -34,7 +34,7 @@ export default function ControlSelect({
             <SelectValue></SelectValue>
           </SelectTrigger>
         </FormControl>
-        <SelectContent className="w-96 h-72">
+        <SelectContent className="w-96 max-h-72">
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}

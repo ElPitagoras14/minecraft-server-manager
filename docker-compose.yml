@@ -1,32 +1,5 @@
 version: "3"
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backend-mc
-    ports:
-      - 8001:3000
-    environment:
-      - BACKEND_PORT=3000
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
-      - DOCKER_API_URL=http://host.docker.internal:2375
-      - ADMIN_DISCORD_ID=${ADMIN_DISCORD_ID}
-      - ADMIN_USERNAME=${ADMIN_USERNAME}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - MYSQL_HOST=mysql
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_PORT=3306
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
-    depends_on:
-      - mysql
-      - redis
-    restart: unless-stopped
-
   web:
     build:
       context: ./web
@@ -39,14 +12,44 @@ services:
         - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
     container_name: web-mc
     ports:
-      - 8002:${FRONTEND_PORT}
+      - 4010:${FRONTEND_PORT}
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - 4011:3000
+    environment:
+      - BACKEND_PORT=3000
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - DOCKER_API_URL=http://host.docker.internal:2375
+      - DOCKER_DATA=${DOCKER_DATA}
+      - ADMIN_DISCORD_ID=${ADMIN_DISCORD_ID}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
+    volumes:
+      - ${DOCKER_DATA}/servers:/minecraft-servers
+    depends_on:
+      - mysql
+      - redis
     restart: unless-stopped
 
   discord-bot:
     build:
       context: ./discord-bot
       dockerfile: Dockerfile
-    container_name: discord-bot-mc
+    container_name: discord-bot
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
@@ -58,19 +61,22 @@ services:
       - backend
     restart: unless-stopped
 
-  redis:
-    image: redis:latest
-    container_name: redis-mc
-    restart: unless-stopped
-
   mysql:
     image: mysql:5.7
     ports:
-      - 8003:3306
+      - 4012:3306
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     volumes:
       - ./backend/src/databases/init.sql:/docker-entrypoint-initdb.d/init.sql
-    container_name: mysql-mc
+      - ${DOCKER_DATA}/mysql-data:/var/lib/mysql
+    container_name: mysql
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    ports:
+      - 4013:6379
+    container_name: redis
     restart: unless-stopped

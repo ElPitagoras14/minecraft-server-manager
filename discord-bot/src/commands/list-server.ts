@@ -45,7 +45,6 @@ export async function execute(interaction: CommandInteraction) {
         requesterUser: username,
       },
     };
-    console.log(allServerOptions);
     const response = await axios.request(allServerOptions);
     const {
       data: {

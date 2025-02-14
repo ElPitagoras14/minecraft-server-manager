@@ -53,7 +53,7 @@ export const generateToken = (
 };
 
 export const generateLongLivedToken = (payload: object): string => {
-  return jwt.sign(payload, secretKey); // Sin expiresIn
+  return jwt.sign(payload, secretKey);
 };
 
 export const verifyToken = (token: string): any => {

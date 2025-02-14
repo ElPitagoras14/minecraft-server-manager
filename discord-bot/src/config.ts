@@ -13,7 +13,7 @@ export const generalConfig = {
   clientId: process.env.DISCORD_CLIENT_ID,
   backend: {
     host: process.env.BACKEND_HOST || "localhost",
-    port: process.env.BACKEND_PORT || "8000",
+    port: process.env.BACKEND_PORT || 3000,
   },
   admin: {
     username: process.env.ADMIN_USERNAME,

@@ -16,6 +16,8 @@
     "@types/dockerode": "^3.3.34",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/websocket": "^1.0.10",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "bull": "^4.16.5",

@@ -1,6 +1,6 @@
 import { startContainer, waitForRCON } from "../docker/client";
 import Queue from "bull";
-import redisClient from "../databases/redis-client";
+import redisClient from "./redis-client";
 import { logger } from "../log";
 import { executeQuery, serverManagerPool } from "../databases/clients";
 import { requestMap } from "../web-socket";

@@ -42,6 +42,7 @@ const tryReconnect = () => {
       filename: "web-socket.ts",
       func: "tryReconnect",
     });
+    process.exit(1);
   }
 };
 

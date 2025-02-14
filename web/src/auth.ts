@@ -40,6 +40,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           data: credentials,
         };
 
+        console.log("loginOptions", loginOptions);
+
         try {
           const response = await axios.request(loginOptions);
           const {
@@ -47,6 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               payload: { token },
             },
           } = response;
+
 
           if (!token) {
             return null;

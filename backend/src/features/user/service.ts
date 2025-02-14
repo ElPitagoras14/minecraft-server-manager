@@ -7,14 +7,14 @@ import { encryptPassword, getRandomWord } from "../auth/utils";
 export const getUserByUsername = async (username: string) => {
   const sql = `
     SELECT
-      id,
-      username,
-      email,
-      password,
-      is_admin as isAdmin,
-      status
-    FROM users
-    WHERE username = ?
+      u.id,
+      u.username,
+      u.email,
+      u.password,
+      u.is_admin as isAdmin,
+      u.status
+    FROM users u
+    WHERE u.username = ?
   `;
   const { result } = await executeQuery(sql, [username], serverManagerPool);
 
@@ -38,7 +38,7 @@ export const createUserController = async (req: Request, res: Response) => {
 
     childLogger.info("Creating user", {
       filename: "service.ts",
-      func: "createUser",
+      func: "createUserController",
     });
     const randomWord = getRandomWord(10);
     const password = await encryptPassword(randomWord);
@@ -48,11 +48,11 @@ export const createUserController = async (req: Request, res: Response) => {
       VALUES (?, ?, ?, ?)
     `;
     const values = [id, username, email, password];
-    const result = await executeQuery(sql, values, serverManagerPool);
+    await executeQuery(sql, values, serverManagerPool);
 
     childLogger.info(`User ${username} created correctly`, {
       filename: "service.ts",
-      func: "createUser",
+      func: "createUserController",
     });
 
     const response = {
@@ -68,21 +68,29 @@ export const createUserController = async (req: Request, res: Response) => {
 
     res.status(201).json(response);
   } catch (error: any) {
-    childLogger.error("Error creating user", {
+    const {
+      message,
+      statusCode,
+      json: { message: specificMessage } = {},
+    } = error;
+
+    childLogger.error(`Error while creating user`, {
       filename: "service.ts",
-      func: "createUser",
+      func: "createUserController",
       extra: {
-        error: error.message,
-      }
+        error: message,
+      },
     });
+
     const response = {
       requestId,
-      statusCode: 500,
-      message: "Error creating user",
+      statusCode: statusCode || 500,
+      message: message || "Internal Server Error",
       payload: {
-        error: error.message,
+        error: specificMessage,
       },
     };
-    res.status(500).json(response);
+
+    res.status(statusCode || 500).json(response);
   }
 };
