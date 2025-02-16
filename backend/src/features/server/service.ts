@@ -2231,8 +2231,9 @@ export const restoreBackupController = async (req: Request, res: Response) => {
       return;
     }
 
+    await stopContainer(containerId);
+
     const serverPath = `${dockerData}/servers/minecraft-${port}`;
-    console.log(path, `${serverPath}/${serverName}`);
     await deCompressDir(path, `${serverPath}/${serverName}`);
 
     const properties = parseMinecraftProperties(
