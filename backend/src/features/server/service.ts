@@ -1053,7 +1053,7 @@ export const startServerController = async (req: Request, res: Response) => {
     `;
     connection.execute(logSql, [
       requestId,
-      containerId,
+      serverId,
       requesterUser,
       "start-server",
       "SUCCESS",
@@ -1955,7 +1955,8 @@ export const createServerBackupController = async (
         s.port,
         s.name,
         s.version,
-        s.creator_id as creatorId
+        s.creator_id as creatorId,
+        s.container_id as containerId
       FROM servers s
       WHERE s.id = ?;
     `;
@@ -1983,7 +1984,7 @@ export const createServerBackupController = async (
       return;
     }
 
-    const [{ port, creatorId, name: serverName, version } = {}] =
+    const [{ port, creatorId, name: serverName, version, containerId } = {}] =
       infoResult || [];
 
     if (requesterId !== creatorId) {
@@ -2061,6 +2062,8 @@ export const createServerBackupController = async (
 
     const serverPath = `${dockerData}/servers/minecraft-${port}/${serverName}`;
 
+    await stopContainer(containerId);
+
     const backupName = generateBackupName();
     const backupPath = `${dockerData}/backups/${backupName}.zip`;
 
@@ -2073,6 +2076,16 @@ export const createServerBackupController = async (
     `;
     const values = [serverId, backupName, version, backupPath, size];
     await executeQuery(insertSql, values, serverManagerPool);
+
+    const jobId = await addTaskToQueue(
+      { serverId, containerId, requestId, date: Date.now() },
+      "server"
+    );
+
+    childLogger.info(`Enqueued task with ID: ${jobId}`, {
+      filename: "service.ts",
+      func: "createServerBackupController",
+    });
 
     const logSql = `
       INSERT INTO server_logs (request_id, server_id, username, action, status)
@@ -2094,6 +2107,7 @@ export const createServerBackupController = async (
         backupName,
         backupPath,
         size,
+        jobId,
       },
     };
 

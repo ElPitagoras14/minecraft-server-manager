@@ -103,6 +103,7 @@ export default function CreateDialog({ updateData, total }: CreateDialogProps) {
       setOpen(false);
       toast({
         title: `Backup ${backupName} created`,
+        description: "The server will be restarted during the backup process",
       });
     } catch (error: unknown) {
       handleErrorResponse(error);
