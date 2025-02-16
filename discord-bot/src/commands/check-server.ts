@@ -41,6 +41,7 @@ export async function execute(interaction: CommandInteraction) {
         Authorization: `Bearer ${authToken}`,
       },
     };
+    console.log(serverInfoOptions);
     const response = await axios.request(serverInfoOptions);
     const {
       data: { payload },

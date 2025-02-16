@@ -53,10 +53,10 @@ initializeServerQueue.process(async (job) => {
     await startContainer(containerId);
     await waitForRCON(containerId, date);
 
-    console.log("requestMap", requestMap);
-
     const connection = requestMap.get(`${job.id}`);
+    console.log("connection", connection);
     if (connection) {
+      console.log("Sending message to client");
       connection.sendUTF(
         JSON.stringify({
           action: "checkServerIsReady",
