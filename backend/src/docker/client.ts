@@ -176,7 +176,10 @@ export const recreateContainerProperties = async (
     const containerExists = await prevContainer.inspect().catch(() => null);
 
     if (containerExists) {
-      await prevContainer.stop();
+      const containerInfo = await prevContainer.inspect();
+      if (containerInfo.State.Running) {
+        await prevContainer.stop();
+      }
       await prevContainer.remove();
     }
 
