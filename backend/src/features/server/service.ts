@@ -2062,7 +2062,8 @@ export const createServerBackupController = async (
 
     const serverPath = `${dockerData}/servers/minecraft-${port}/${serverName}`;
 
-    await stopContainer(containerId);
+    const rconCommands = ["save-all", "save-off"];
+    await execRconCommands(containerId, rconCommands);
 
     const backupName = generateBackupName();
     const backupPath = `${dockerData}/backups/${backupName}.zip`;
@@ -2077,15 +2078,8 @@ export const createServerBackupController = async (
     const values = [serverId, backupName, version, backupPath, size];
     await executeQuery(insertSql, values, serverManagerPool);
 
-    const jobId = await addTaskToQueue(
-      { serverId, containerId, requestId, date: Date.now() },
-      "server"
-    );
-
-    childLogger.info(`Enqueued task with ID: ${jobId}`, {
-      filename: "service.ts",
-      func: "createServerBackupController",
-    });
+    const rconCommands2 = ["save-on"];
+    await execRconCommands(containerId, rconCommands2);
 
     const logSql = `
       INSERT INTO server_logs (request_id, server_id, username, action, status)
@@ -2107,7 +2101,6 @@ export const createServerBackupController = async (
         backupName,
         backupPath,
         size,
-        jobId,
       },
     };
 
