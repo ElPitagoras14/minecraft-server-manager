@@ -763,7 +763,8 @@ export const deleteServerController = async (req: Request, res: Response) => {
       SELECT
         s.status,
         s.container_id as containerId,
-        s.creator_id as creatorId
+        s.creator_id as creatorId,
+        s.volume_path as volumePath
       FROM servers s
       WHERE s.id = ?;
     `;
@@ -791,7 +792,7 @@ export const deleteServerController = async (req: Request, res: Response) => {
       return;
     }
 
-    const [{ creatorId, containerId }] = roleServerResult;
+    const [{ creatorId, containerId, volumePath }] = roleServerResult;
     if (requesterId !== creatorId) {
       childLogger.info("Not authorized", {
         filename: "service.ts",
@@ -837,6 +838,8 @@ export const deleteServerController = async (req: Request, res: Response) => {
       WHERE server_id = ?;
     `;
     await executeQuery(deleteBackupsSql, [serverId], serverManagerPool);
+
+    deleteFile(volumePath);
 
     childLogger.info("Minecraft server deleted successfully", {
       filename: "service.ts",
@@ -2222,7 +2225,7 @@ export const restoreBackupController = async (req: Request, res: Response) => {
     }
 
     const serverPath = `${dockerData}/servers/minecraft-${port}`;
-    console.log(path, `${serverPath}/${serverName}`)
+    console.log(path, `${serverPath}/${serverName}`);
     await deCompressDir(path, `${serverPath}/${serverName}`);
 
     const properties = parseMinecraftProperties(
