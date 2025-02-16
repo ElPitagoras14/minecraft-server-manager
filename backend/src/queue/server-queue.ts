@@ -45,10 +45,15 @@ initializeServerQueue.process(async (job) => {
       SET status = 'INITIALIZING'
       WHERE id = ?;
     `;
+
+    console.log("requestMap", requestMap);
+
     await executeQuery(initStatusSql, [serverId], serverManagerPool);
 
     await startContainer(containerId);
     await waitForRCON(containerId, date);
+
+    console.log("requestMap", requestMap);
 
     const connection = requestMap.get(`${job.id}`);
     if (connection) {

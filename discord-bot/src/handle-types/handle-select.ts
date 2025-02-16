@@ -24,12 +24,18 @@ export const handleStringSelectInput = async (
   if (customId === "server-info") {
     try {
       const serverId = interaction.values[0];
+      const userId = interaction.user.id;
+      const username = interaction.user.username;
 
       const serverInfoOptions = {
         url: `http://${host}:${port}/servers/${serverId}`,
         method: "GET",
         headers: {
           Authorization: `Bearer ${authToken}`,
+        },
+        params: {
+          requesterId: userId,
+          requesterUser: username,
         },
       };
       const response = await axios.request(serverInfoOptions);
