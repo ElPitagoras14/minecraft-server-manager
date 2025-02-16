@@ -10,7 +10,8 @@ services:
         - SERVER_API_URL=http://backend:3000
         - NEXT_PUBLIC_API_URL=http://localhost:8001
         - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
-    container_name: web-mc
+        - MEXTAUTH_URL=http://localhost:4010
+    container_name: web
     ports:
       - 4010:${FRONTEND_PORT}
     restart: unless-stopped
