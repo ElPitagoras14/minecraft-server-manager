@@ -1763,7 +1763,7 @@ export const updateServerPropertiesController = async (
     );
 
     const jobId = await addTaskToQueue(
-      { serverId, container: newContainerId, requestId, date: Date.now() },
+      { serverId, containerId: newContainerId, requestId, date: Date.now() },
       "server"
     );
 
