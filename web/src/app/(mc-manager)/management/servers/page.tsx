@@ -30,7 +30,7 @@ const getData = async (
   requesterId: string
 ): Promise<ServerResponse> => {
   const dataOptions = {
-    url: `${API_URL}/server`,
+    url: `${API_URL}/servers`,
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -55,7 +55,6 @@ const getVersions = async (): Promise<ComboboxItem[]> => {
   };
 
   const response = await axios.request(dataOptions);
-  console.log(response.data);
   const {
     data: { result },
   } = response;
@@ -65,7 +64,13 @@ const getVersions = async (): Promise<ComboboxItem[]> => {
     value: version,
   }));
 
-  return parsedItems;
+  return [
+    {
+      label: "Latest",
+      value: "LATEST",
+    },
+    ...parsedItems,
+  ];
 };
 
 export default function ServersPage() {
@@ -81,12 +86,6 @@ export default function ServersPage() {
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [versions, setVersions] = useState<ComboboxItem[]>([]);
-  // const [pagination, setPagination] = useState<PaginationState>({
-  //   pageIndex: 0,
-  //   pageSize: 10,
-  // });
-  // const [sorting, setSorting] = useState<SortingState>([]);
-  // const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const handleErrorResponse = (error: unknown) => {
     if (isAxiosError(error)) {
@@ -100,7 +99,7 @@ export default function ServersPage() {
         return;
       } else if (data.statusCode === 404) {
         toast({
-          title: "No se encontraron datos",
+          title: "No data found",
         });
         setData({
           items: [],
@@ -114,7 +113,7 @@ export default function ServersPage() {
     } else {
       toast({
         variant: "destructive",
-        title: "Error desconocido",
+        title: "Unknown error",
       });
     }
   };
@@ -216,7 +215,6 @@ export default function ServersPage() {
   useEffect(() => {
     (async () => {
       const versions = await getVersions();
-      console.log(versions);
       setVersions(versions);
     })();
     if (!token) {

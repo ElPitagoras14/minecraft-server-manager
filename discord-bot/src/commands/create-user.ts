@@ -13,39 +13,53 @@ const {
 } = generalConfig;
 
 export const data = new SlashCommandBuilder()
-  .setName("checktask")
-  .setDescription("Check if the server is ready")
-  .addIntegerOption((option) =>
-    option.setName("job-id").setDescription("The job ID").setRequired(true)
+  .setName("createuser")
+  .setDescription("Create a user to create servers")
+  .addStringOption((option) =>
+    option
+      .setName("password")
+      .setDescription("The server password")
+      .setRequired(true)
   );
 
 export async function execute(interaction: CommandInteraction) {
   try {
-    logger.info("Checking server status", {
-      filename: "check-init.ts",
+    logger.info("Creating user", {
+      filename: "create-user.ts",
       func: "execute",
     });
-    const jobId = interaction.options.get("job-id")?.value;
-    const checkStatusOptions = {
-      url: `http://${host}:${port}/servers/check-init/${jobId}`,
-      method: "GET",
+    const password = interaction.options.get("password")?.value;
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+
+    const createUserOptions = {
+      url: `http://${host}:${port}/users/create`,
+      method: "POST",
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
+      data: {
+        id: userId,
+        username,
+        password,
+      },
     };
-    const response = await axios.request(checkStatusOptions);
+
+    const response = await axios.request(createUserOptions);
     const {
       data: {
-        payload: { status },
+        payload: { username: newUsername },
       },
     } = response;
-    return interaction.reply(
-      `Status: ${status === "in-progress" ? "In progress" : "Ready"}`
-    );
+
+    return interaction.reply({
+      content: `User ${newUsername} created successfully. Please contact an admin to get access.`,
+      flags: MessageFlags.Ephemeral,
+    });
   } catch (error: any) {
     if (isAxiosError(error)) {
       const { response: { data } = {} } = error;
-      logger.error("Error fetching status:", {
+      logger.error("Error creating user:", {
         filename: "check-init.ts",
         func: "execute",
         extra: data,
@@ -59,7 +73,7 @@ export async function execute(interaction: CommandInteraction) {
       }
     }
     await interaction.reply({
-      content: "There was an error while fetching the status.",
+      content: "There was an error while creating the user.",
       flags: MessageFlags.Ephemeral,
     });
   }

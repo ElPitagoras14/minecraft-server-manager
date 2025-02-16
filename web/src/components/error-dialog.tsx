@@ -8,13 +8,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { useErrorDialog } from "../hooks/use-error-dialog";
 
 const statusCodeMap: Record<number, string> = {
-  404: "No encontrado",
-  409: "Conflicto",
-  500: "Error interno del servidor",
+  404: "Not Found",
+  409: "Conflict",
+  500: "Internal Server Error",
 };
 
 export default function ErrorDialog() {

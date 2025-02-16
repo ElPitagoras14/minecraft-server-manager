@@ -15,14 +15,14 @@ import {
   serverFields,
   startServer,
   stopServer,
+  deleteServer,
 } from "./utils";
 import LoadableButton from "@/components/loadable-button";
 import { useSession } from "next-auth/react";
 import { useErrorDialog } from "@/hooks/use-error-dialog";
 import { toast } from "@/hooks/use-toast";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Separator } from "@/components/ui/separator";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -48,7 +48,7 @@ const serverValidationSchema = z.object(
 const getProperties = async (serverId: string, token: string) => {
   const dataOptions = {
     method: "GET",
-    url: `${API_URL}/server/properties/${serverId}`,
+    url: `${API_URL}/servers/${serverId}/properties`,
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -65,7 +65,7 @@ const getProperties = async (serverId: string, token: string) => {
 const getData = async (serverId: string, token: string) => {
   const dataOptions = {
     method: "GET",
-    url: `${API_URL}/server/${serverId}`,
+    url: `${API_URL}/servers/${serverId}`,
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -88,7 +88,7 @@ const updateRole = async (
 ) => {
   const dataOptions = {
     method: "PUT",
-    url: `${API_URL}/server/${serverId}`,
+    url: `${API_URL}/servers/${serverId}`,
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -102,23 +102,49 @@ const updateRole = async (
   await axios.request(dataOptions);
 };
 
+const updateProperties = async (
+  serverId: string,
+  token: string,
+  requesterId: string,
+  requesterUser: string,
+  data: z.infer<typeof propertyValidationSchema>
+) => {
+  const dataOptions = {
+    method: "PUT",
+    url: `${API_URL}/servers/${serverId}/properties`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      requesterId,
+      requesterUser,
+      properties: data,
+    },
+  };
+
+  await axios.request(dataOptions);
+};
+
 const propertyMap = {
   "level-name": "serverName",
   "max-players": "maxPlayers",
   "view-distance": "viewDistance",
   motd: "motd",
   difficulty: "difficulty",
+  version: "version",
 };
 
 export default function GeneralTab() {
   const { data: session } = useSession();
-  const { user: { token = "", id: userId = "", name: username = "" } = {} } =
+  const { user: { token = "", id: userId = "", username = "" } = {} } =
     session || {};
 
+  const { id } = useParams();
   const { showError } = useErrorDialog();
+  const router = useRouter();
 
   const [data, setData] = useState<Record<string, string>>();
-  const { name, version, status, port, roleName } = data || {};
+  const { name, version, status, port, containerId } = data || {};
   const [properties, setProperties] = useState<Record<string, unknown>>();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingRole, setIsLoadingRole] = useState<boolean>(false);
@@ -142,14 +168,14 @@ export default function GeneralTab() {
   const propertyForm = useForm<z.infer<typeof propertyValidationSchema>>({
     defaultValues: propertyInitialValues,
     resolver: zodResolver(propertyValidationSchema),
+    mode: "onChange",
   });
 
   const serverForm = useForm<z.infer<typeof serverValidationSchema>>({
     defaultValues: serverInitialValues,
     resolver: zodResolver(serverValidationSchema),
+    mode: "onChange",
   });
-
-  const { id } = useParams();
 
   const handleErrorResponse = (error: unknown) => {
     if (isAxiosError(error)) {
@@ -163,7 +189,7 @@ export default function GeneralTab() {
         return;
       } else if (data.statusCode === 404) {
         toast({
-          title: "No se encontraron datos",
+          title: "No data found",
         });
         setData({});
         return;
@@ -174,7 +200,7 @@ export default function GeneralTab() {
     } else {
       toast({
         variant: "destructive",
-        title: "Error desconocido",
+        title: "Unknown error",
       });
     }
   };
@@ -192,7 +218,7 @@ export default function GeneralTab() {
 
   const handleStartServer = async (id: string, name: string) => {
     try {
-      await startServer(id, token, userId);
+      await startServer(id, token, userId, username);
       await loadData();
       toast({
         title: `Server ${name} started`,
@@ -205,7 +231,7 @@ export default function GeneralTab() {
 
   const handleStopServer = async (id: string, name: string) => {
     try {
-      await stopServer(id, token, userId);
+      await stopServer(id, token, userId, username);
       await loadData();
       toast({
         title: `Server ${name} stopped`,
@@ -217,10 +243,23 @@ export default function GeneralTab() {
 
   const handleRestartServer = async (id: string, name: string) => {
     try {
-      await restartServer(id, token, userId);
+      await restartServer(id, token, userId, username);
       await loadData();
       toast({
         title: `Server ${name} restarted`,
+      });
+    } catch (error: unknown) {
+      handleErrorResponse(error);
+    }
+  };
+
+  const handleDeleteServer = async (id: string, name: string) => {
+    try {
+      await deleteServer(id, token, userId, username);
+      await loadData();
+      router.push("/management/servers");
+      toast({
+        title: `Server ${name} deleted`,
       });
     } catch (error: unknown) {
       handleErrorResponse(error);
@@ -231,7 +270,7 @@ export default function GeneralTab() {
     async (data: z.infer<typeof serverValidationSchema>) => {
       try {
         setIsLoadingRole(true);
-        await updateRole(id as string, token, userId, username as string, data);
+        await updateRole(id as string, token, userId, username, data);
         await loadData();
         toast({
           title: "Server updated",
@@ -244,19 +283,37 @@ export default function GeneralTab() {
     }
   );
 
+  const onSubmitProperties = propertyForm.handleSubmit(
+    async (data: z.infer<typeof propertyValidationSchema>) => {
+      try {
+        setIsLoading(true);
+        await updateProperties(id as string, token, userId, username, data);
+        await loadData();
+        toast({
+          title: "Properties updated",
+        });
+      } catch (error: unknown) {
+        handleErrorResponse(error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  );
+
   useEffect(() => {
     if (!properties) return;
     const newInitialValues = Object.entries(properties).reduce(
       (acc: Record<string, unknown>, [key, value]) => {
         if (Object.hasOwn(propertyMap, key)) {
-          acc[propertyMap[key as keyof typeof propertyMap]] = value;
+          acc[propertyMap[key as keyof typeof propertyMap]] = `${value}`;
         }
         return acc;
       },
       {}
     );
+    newInitialValues.version = version;
     propertyForm.reset(newInitialValues);
-  }, [properties]);
+  }, [properties, data]);
 
   useEffect(() => {
     if (!data) return;
@@ -272,8 +329,9 @@ export default function GeneralTab() {
       await loadData();
     })();
   }, [token, id]);
+
   return (
-    <>
+    <div className="flex flex-col space-y-4">
       <div className="flex justify-between">
         <div className="flex flex-col space-y-1">
           <p className="text-lg font-semibold">
@@ -281,6 +339,8 @@ export default function GeneralTab() {
           </p>
           <p className="text-muted-foreground text-sm">
             {status} - {port}
+            <br />
+            {containerId}
           </p>
           <div className="flex flex-row items-center space-x-2 pt-2">
             <Button variant="secondary" onClick={async () => await loadData()}>
@@ -304,6 +364,11 @@ export default function GeneralTab() {
               label="Restart"
               func={async () => handleRestartServer(id as string, name)}
               classname="bg-orange-500 hover:bg-orange-700"
+            />
+            <LoadableButton
+              label="Delete"
+              func={async () => handleDeleteServer(id as string, name)}
+              classname="bg-red-500 hover:bg-red-700"
             />
           </div>
         </div>
@@ -349,18 +414,20 @@ export default function GeneralTab() {
             <Button
               type="button"
               disabled={
-                !propertyForm.formState.isDirty &&
-                propertyForm.formState.isValid
+                !propertyForm.formState.isDirty ||
+                isLoading ||
+                status === "INITIALIZING"
               }
+              onClick={onSubmitProperties}
             >
               {isLoading && (
                 <Icons.spinner className="animate-spin mr-1 h-11" />
               )}
-              Save
+              Restart and Apply
             </Button>
           </div>
         </form>
       </Form>
-    </>
+    </div>
   );
 }

@@ -39,10 +39,6 @@ const pullImage = async (imageName: string, logger: any): Promise<void> => {
 const formatDockerBindPath = (path: string) => {
   let formattedPath = path.replace(/\\/g, "/");
 
-  if (formattedPath.includes(" ")) {
-    formattedPath = `"${formattedPath}"`;
-  }
-
   if (/^[A-Z]:\//i.test(formattedPath)) {
     formattedPath = `/${formattedPath[0].toLowerCase()}${formattedPath.slice(
       2
@@ -154,6 +150,150 @@ export const stopContainer = async (containerId: string) => {
   }
 };
 
+export const recreateContainerProperties = async (
+  containerId: string,
+  serverPath: string,
+  newPort: number,
+  serverProperties: any
+) => {
+  try {
+    const {
+      version = "LATEST",
+      motd = "A simple server",
+      difficulty = "normal",
+      serverIcon,
+      maxPlayers = 8,
+      viewDistance = 16,
+      serverName = "world",
+    } = serverProperties || {};
+
+    logger.info("Recreating Minecraft container", {
+      filename: "client.ts",
+      func: "recreateContainerProperties",
+    });
+
+    const prevContainer = docker.getContainer(containerId);
+    const containerExists = await prevContainer.inspect().catch(() => null);
+
+    if (containerExists) {
+      await prevContainer.stop();
+      await prevContainer.remove();
+    }
+
+    const containerOptions = {
+      Image: "itzg/minecraft-server",
+      name: `minecraft-${newPort}`,
+      Tty: true,
+      Env: [
+        "EULA=TRUE",
+        "ANNOUNCE_PLAYER_ACHIEVEMENTS=true",
+        "ONLINE_MODE=FALSE",
+        `VERSION=${version}`,
+        `MOTD=${motd}`,
+        `DIFFICULTY=${difficulty}`,
+        `MAX_PLAYERS=${maxPlayers}`,
+        `VIEW_DISTANCE=${viewDistance}`,
+        `LEVEL=${serverName}`,
+      ],
+      ExposedPorts: {
+        "25565/tcp": {},
+      },
+      HostConfig: {
+        PortBindings: {
+          "25565/tcp": [{ HostPort: `${newPort}` }],
+        },
+        Binds: [`${serverPath}:/data`],
+      },
+    };
+
+    if (serverIcon) {
+      containerOptions.Env.push(`ICON=${serverIcon}`);
+    }
+
+    const container = await docker.createContainer(containerOptions);
+    const newContainerId = container.id.slice(0, 12);
+
+    logger.info(`Minecraft container created with id: ${newContainerId}`, {
+      filename: "client.ts",
+      func: "createContainer",
+    });
+
+    return newContainerId;
+  } catch (error) {
+    logger.error(`Error while creating Minecraft container`, {
+      filename: "client.ts",
+      func: "createContainer",
+      extra: {
+        error,
+      },
+    });
+    throw error;
+  }
+};
+
+export const execRconCommands = async (
+  containerId: string,
+  commands: string[]
+) => {
+  try {
+    const container = docker.getContainer(containerId);
+
+    const commandsResult: {
+      command: string;
+      output: string;
+    }[] = [];
+
+    for (const cmd of commands) {
+      try {
+        const exec = await container.exec({
+          Cmd: ["rcon-cli", cmd],
+          AttachStdout: true,
+          AttachStderr: true,
+        });
+
+        let output = "";
+
+        const stream = await exec.start({
+          Detach: false,
+          Tty: false,
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          stream.on("data", (data: Buffer) => {
+            output += data.toString("utf-8").replace(/[\x00-\x1F\x7F]/g, "");
+          });
+
+          stream.on("end", () => {
+            commandsResult.push({
+              command: cmd,
+              output,
+            });
+            resolve();
+          });
+
+          stream.on("error", reject);
+        });
+      } catch (error) {
+        logger.error(`Error executing command in container ${containerId}`, {
+          filename: "client.ts",
+          func: "execCommand",
+          extra: error,
+        });
+        throw error;
+      }
+    }
+
+    return commandsResult;
+  } catch (error) {
+    logger.error(`Error executing command in container ${containerId}`, {
+      filename: "client.ts",
+      func: "execCommand",
+      extra: error,
+    });
+    throw error;
+  }
+};
+
 export const restartContainer = async (containerId: string) => {
   try {
     const container = docker.getContainer(containerId);
@@ -203,6 +343,7 @@ export const createContainer = async (
     const formattedPath = formatDockerBindPath(dockerData as string);
 
     const serverPath = `${formattedPath}/servers/minecraft-${newPort}`;
+    console.log(serverPath);
     if (!fs.existsSync(serverPath)) {
       fs.mkdirSync(serverPath, { recursive: true });
     }
@@ -214,7 +355,6 @@ export const createContainer = async (
       Env: [
         "EULA=TRUE",
         "ANNOUNCE_PLAYER_ACHIEVEMENTS=true",
-        "VIEW_DISTANCE=10",
         "ONLINE_MODE=FALSE",
         `VERSION=${version}`,
         `MOTD=${motd}`,
@@ -266,7 +406,7 @@ export const createContainer = async (
 export const deleteContainer = async (containerId: string) => {
   try {
     const container = docker.getContainer(containerId);
-    await container.remove();
+    await container.remove({ force: true });
     logger.info(`Minecraft container ${containerId} deleted correctly`, {
       filename: "client.ts",
       func: "deleteContainer",

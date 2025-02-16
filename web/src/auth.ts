@@ -40,8 +40,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           data: credentials,
         };
 
-        console.log("loginOptions", loginOptions);
-
         try {
           const response = await axios.request(loginOptions);
           const {
@@ -49,7 +47,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               payload: { token },
             },
           } = response;
-
 
           if (!token) {
             return null;
@@ -60,9 +57,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const { id, username, isAdmin } = decodedToken;
           const user = { id, name: username, isAdmin, token };
           return user;
-        } catch (error: unknown) {
-          console.error("error", error);
-          return null
+        } catch (error: any) {
+          console.error("error", error.response.data.message);
+          return null;
         }
       },
     }),

@@ -49,7 +49,7 @@ const createServer = async (
   requesterUser: string
 ) => {
   const createOptions = {
-    url: `${API_URL}/server`,
+    url: `${API_URL}/servers`,
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -105,7 +105,7 @@ export default function CreateDialog({
         setOpen(false);
         toast({
           title: "Server created",
-          description: "Server created. It will be ready shortly.",
+          description: "It will be ready shortly.",
         });
       } catch (error: unknown) {
         console.error("error", error);

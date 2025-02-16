@@ -40,31 +40,33 @@ export const createAdmin = async () => {
 
 export const checkAllServerStatus = async () => {
   const serversSql = `
-    SELECT s.id
+    SELECT s.container_id as containerId
     FROM servers s
     WHERE s.status <> 'DELETED';
   `;
 
   const { result } = await executeQuery(serversSql, [], serverManagerPool);
 
-  const allPromises = result.map(async ({ id }: { id: string }) => {
-    try{
-      const { Running } = await checkStatusContainer(id);
-      const status = Running ? "READY" : "DOWN";
-      const updateStatusSql = `
+  const allPromises = result.map(
+    async ({ containerId }: { containerId: string }) => {
+      try {
+        const { Running } = await checkStatusContainer(containerId);
+        const status = Running ? "READY" : "DOWN";
+        const updateStatusSql = `
         UPDATE servers
         SET status = ?
         WHERE id = ?;
       `;
-      await executeQuery(updateStatusSql, [status, id], serverManagerPool);
-    } catch (error: unknown) {
-      logger.error("Error checking server status", {
-        filename: "init.ts",
-        func: "checkAllServerStatus",
-        extra: { error },
-      });
+        await executeQuery(updateStatusSql, [status, containerId], serverManagerPool);
+      } catch (error: unknown) {
+        logger.error("Error checking server status", {
+          filename: "init.ts",
+          func: "checkAllServerStatus",
+          extra: { error },
+        });
+      }
     }
-  });
+  );
 
   await Promise.all(allPromises);
 };

@@ -34,7 +34,7 @@ export async function execute(interaction: CommandInteraction) {
       ?.roles.cache.map((role) => role.name);
 
     const allServerOptions = {
-      url: `http://${host}:${port}/server`,
+      url: `http://${host}:${port}/servers`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,

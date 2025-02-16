@@ -25,8 +25,8 @@ const app: Application = express();
 app.use(express.json());
 app.use(cors());
 
-app.use("/server", serverRouter);
-app.use("/user", authenticateToken, userRouter);
+app.use("/servers", serverRouter);
+app.use("/users", authenticateToken, userRouter);
 app.use("/auth", authRouter);
 
 const httpServer = http.createServer(app);

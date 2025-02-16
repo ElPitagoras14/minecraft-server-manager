@@ -39,7 +39,8 @@ services:
       - REDIS_PORT=6379
       - AUTH_EXPIRE_MINUTES=${AUTH_EXPIRE_MINUTES}
     volumes:
-      - ${DOCKER_DATA}/servers:/minecraft-servers
+      - ${DOCKER_DATA}/servers:/minecraft-server-manager/servers
+      - ${DOCKER_DATA}/backups:/minecraft-server-manager/backups
     depends_on:
       - mysql
       - redis

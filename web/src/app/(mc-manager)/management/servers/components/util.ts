@@ -98,7 +98,7 @@ export const startServer = async (
   requesterId: string
 ): Promise<void> => {
   const dataOptions = {
-    url: `${API_URL}/server/start/${id}`,
+    url: `${API_URL}/servers/start/${id}`,
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -118,7 +118,7 @@ export const stopServer = async (
   requesterId: string
 ): Promise<void> => {
   const dataOptions = {
-    url: `${API_URL}/server/stop/${id}`,
+    url: `${API_URL}/servers/stop/${id}`,
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -138,7 +138,7 @@ export const restartServer = async (
   requesterId: string
 ): Promise<void> => {
   const dataOptions = {
-    url: `${API_URL}/server/restart/${id}`,
+    url: `${API_URL}/servers/restart/${id}`,
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,

@@ -1,15 +1,23 @@
 import { Router } from "express";
 import {
+  createServerBackupController,
   createServerController,
+  createServerOperatorController,
+  deleteServerBackupController,
   deleteServerController,
+  deleteServerOperatorController,
   getAllServersController,
+  getServerBackupController,
   getServerInfoController,
+  getServerOperatorsController,
   getServerPropertiesController,
   getTaskStatusController,
   restartServerController,
+  restoreBackupController,
   startServerController,
   stopServerController,
   updateServerInfoController,
+  updateServerPropertiesController,
 } from "./service";
 import { schemaValidator } from "../../middleware";
 import {
@@ -58,6 +66,18 @@ router.put(
   restartServerController
 );
 router.get("/job-status/:jobId", getTaskStatusController);
-router.get("/properties/:serverId", getServerPropertiesController);
+
+router.get("/:serverId/properties", getServerPropertiesController);
+router.put("/:serverId/properties", updateServerPropertiesController);
+
+router.get("/:serverId/backups", getServerBackupController);
+router.post("/:serverId/backups", createServerBackupController);
+router.put("/backups/:backupId", restoreBackupController);
+router.delete("/backups/:backupId", deleteServerBackupController);
+
+router.get("/:serverId/operators", getServerOperatorsController);
+router.post("/:serverId/operators", createServerOperatorController);
+router.delete("/:serverId/operators/:username", deleteServerOperatorController);
+// router.get("/:serverId/logs", getServerPropertiesController);
 
 export default router;

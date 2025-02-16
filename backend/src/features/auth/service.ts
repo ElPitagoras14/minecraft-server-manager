@@ -38,6 +38,20 @@ export const loginController = async (req: Request, res: Response) => {
       return;
     }
 
+    if (user.status !== "ACTIVE") {
+      const response = {
+        requestId,
+        statusCode: 401,
+        message: "User is not active",
+      };
+      childLogger.error(`User ${username} is not active`, {
+        filename: "service.ts",
+        func: "loginController",
+      });
+      res.status(401).json(response);
+      return;
+    }
+
     const isPasswordValid = await comparePassword(password, user.password);
     if (!isPasswordValid) {
       const response = {

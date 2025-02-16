@@ -24,7 +24,7 @@ export const handleModalInput = async (
       const description = interaction.fields.getTextInputValue("description");
 
       const createServerOptions = {
-        url: `http://${host}:${port}/server`,
+        url: `http://${host}:${port}/servers`,
         method: "POST",
         headers: {
           Authorization: `Bearer ${authToken}`,

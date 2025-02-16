@@ -19,12 +19,13 @@ export const handleButtonInput = async (
     try {
       const { serverId } = data;
       const userId = interaction.user.id;
+      const username = interaction.user.username;
       const roles = interaction.guild?.members.cache
         .get(userId)
         ?.roles.cache.map((role) => role.name);
 
       const startServerOptions = {
-        url: `http://${host}:${port}/server/start/${serverId}`,
+        url: `http://${host}:${port}/servers/start/${serverId}`,
         method: "PUT",
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -32,6 +33,7 @@ export const handleButtonInput = async (
         data: {
           requesterId: userId,
           requesterRoles: roles,
+          requesterUser: username,
         },
       };
       const response = await axios.request(startServerOptions);
@@ -70,12 +72,13 @@ export const handleButtonInput = async (
     try {
       const { serverId } = data;
       const userId = interaction.user.id;
+      const username = interaction.user.username;
       const roles = interaction.guild?.members.cache
         .get(userId)
         ?.roles.cache.map((role) => role.name);
 
       const stopServerOptions = {
-        url: `http://${host}:${port}/server/stop/${serverId}`,
+        url: `http://${host}:${port}/servers/stop/${serverId}`,
         method: "PUT",
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -83,6 +86,7 @@ export const handleButtonInput = async (
         data: {
           requesterId: userId,
           requesterRoles: roles,
+          requesterUser: username,
         },
       };
       const response = await axios.request(stopServerOptions);
@@ -118,12 +122,13 @@ export const handleButtonInput = async (
     try {
       const { serverId } = data;
       const userId = interaction.user.id;
+      const username = interaction.user.username;
       const roles = interaction.guild?.members.cache
         .get(userId)
         ?.roles.cache.map((role) => role.name);
 
       const restartServerOptions = {
-        url: `http://${host}:${port}/server/restart/${serverId}`,
+        url: `http://${host}:${port}/servers/restart/${serverId}`,
         method: "PUT",
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -131,6 +136,7 @@ export const handleButtonInput = async (
         data: {
           requesterId: userId,
           requesterRoles: roles,
+          requesterUser: username,
         },
       };
       const response = await axios.request(restartServerOptions);

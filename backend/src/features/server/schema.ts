@@ -18,7 +18,6 @@ export const createServerSchema = {
       type: "object",
       properties: {
         requesterId: { type: "string" },
-        requesterUser: { type: "string" },
         serverProperties: {
           type: "object",
           properties: {
@@ -43,10 +42,7 @@ export const getServerInfoSchema = {
     params: {
       type: "object",
       properties: {
-        serverId: {
-          type: "string",
-          pattern: "^[a-zA-Z0-9]{12}$",
-        },
+        serverId: { type: "number" },
       },
       required: ["serverId"],
     },
@@ -59,10 +55,7 @@ export const updateServerInfoSchema = {
     params: {
       type: "object",
       properties: {
-        serverId: {
-          type: "string",
-          pattern: "^[a-zA-Z0-9]{12}$",
-        },
+        serverId: { type: "number" },
       },
       required: ["serverId"],
     },
@@ -84,10 +77,7 @@ export const deleteServerSchema = {
     params: {
       type: "object",
       properties: {
-        serverId: {
-          type: "string",
-          pattern: "^[a-zA-Z0-9]{12}$",
-        },
+        serverId: { type: "number" },
       },
       required: ["serverId"],
     },
@@ -108,10 +98,7 @@ export const startServerSchema = {
     params: {
       type: "object",
       properties: {
-        serverId: {
-          type: "string",
-          pattern: "^[a-zA-Z0-9]{12}$",
-        },
+        serverId: { type: "number" },
       },
       required: ["serverId"],
     },
@@ -119,6 +106,7 @@ export const startServerSchema = {
       type: "object",
       properties: {
         requesterId: { type: "string" },
+        requesterUser: { type: "string" },
         requesterRoles: { type: "array", items: { type: "string" } },
       },
       required: ["requesterId", "requesterUser"],
@@ -132,10 +120,7 @@ export const stopServerSchema = {
     params: {
       type: "object",
       properties: {
-        serverId: {
-          type: "string",
-          pattern: "^[a-zA-Z0-9]{12}$",
-        },
+        serverId: { type: "number" },
       },
       required: ["serverId"],
     },
@@ -143,6 +128,7 @@ export const stopServerSchema = {
       type: "object",
       properties: {
         requesterId: { type: "string" },
+        requesterUser: { type: "string" },
         requesterRoles: { type: "array", items: { type: "string" } },
       },
       required: ["requesterId", "requesterUser"],
@@ -156,10 +142,7 @@ export const restartServerSchema = {
     params: {
       type: "object",
       properties: {
-        serverId: {
-          type: "string",
-          pattern: "^[a-zA-Z0-9]{12}$",
-        },
+        serverId: { type: "number" },
       },
       required: ["serverId"],
     },
@@ -167,6 +150,7 @@ export const restartServerSchema = {
       type: "object",
       properties: {
         requesterId: { type: "string" },
+        requesterUser: { type: "string" },
         requesterRoles: { type: "array", items: { type: "string" } },
       },
       required: ["requesterId", "requesterUser"],

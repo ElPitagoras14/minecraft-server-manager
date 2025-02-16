@@ -35,7 +35,7 @@ export async function execute(interaction: CommandInteraction) {
     });
     const serverId = interaction.options.get("server-id")?.value;
     const serverInfoOptions = {
-      url: `http://${host}:${port}/server/${serverId}`,
+      url: `http://${host}:${port}/servers/${serverId}`,
       method: "GET",
       headers: {
         Authorization: `Bearer ${authToken}`,

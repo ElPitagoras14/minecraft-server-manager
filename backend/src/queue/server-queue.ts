@@ -32,7 +32,7 @@ initializeServerQueue.on("failed", (job, err) => {
 
 initializeServerQueue.process(async (job) => {
   try {
-    const { serverId, requestId, date } = job.data;
+    const { serverId, containerId, requestId, date } = job.data;
 
     logger.info(`Ejecutando job ${job.id}`, {
       filename: "task-queue-processor.ts",
@@ -47,8 +47,8 @@ initializeServerQueue.process(async (job) => {
     `;
     await executeQuery(initStatusSql, [serverId], serverManagerPool);
 
-    await startContainer(serverId);
-    await waitForRCON(serverId, date);
+    await startContainer(containerId);
+    await waitForRCON(containerId, date);
 
     const connection = requestMap.get(`${job.id}`);
     if (connection) {

@@ -1,6 +1,8 @@
 import CustomBreadcrumb from "@/components/custom-breadcrumb";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import GeneralTab from "./components/general-tab";
+import GeneralTab from "./components/general/tab";
+import OperatorsTab from "./components/operators/tab";
+import BackupsTab from "./components/backups/tab";
 
 export default async function ServerPage() {
   return (
@@ -24,6 +26,12 @@ export default async function ServerPage() {
           </TabsList>
           <TabsContent value="general">
             <GeneralTab />
+          </TabsContent>
+          <TabsContent value="backups">
+            <BackupsTab />
+          </TabsContent>
+          <TabsContent value="operators">
+            <OperatorsTab />
           </TabsContent>
         </Tabs>
       </main>

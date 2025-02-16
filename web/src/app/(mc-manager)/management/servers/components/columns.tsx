@@ -3,6 +3,7 @@ import { DataTableColumnHeader } from "@/components/ui/data-table-header";
 
 export type Server = {
   id: string;
+  containerId: string;
   name: string;
   version: string;
   port: number;
@@ -12,7 +13,7 @@ export type Server = {
 
 export const columns: CustomColumnDef<Server>[] = [
   {
-    accessorKey: "id",
+    accessorKey: "containerId",
     label: "ID",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title={"ID"} />

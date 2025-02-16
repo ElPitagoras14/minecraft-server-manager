@@ -113,7 +113,6 @@ export default function CustomField({
             <ControlSelect
               options={fieldInfo.options!}
               formValue={field.value}
-              initValue={fieldInfo.initValue as string}
               onFormValueChange={field.onChange}
               setFormValue={(value: string) =>
                 formContext.setValue(name, value, {

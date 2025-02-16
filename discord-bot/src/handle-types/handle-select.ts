@@ -26,7 +26,7 @@ export const handleStringSelectInput = async (
       const serverId = interaction.values[0];
 
       const serverInfoOptions = {
-        url: `http://${host}:${port}/server/${serverId}`,
+        url: `http://${host}:${port}/servers/${serverId}`,
         method: "GET",
         headers: {
           Authorization: `Bearer ${authToken}`,

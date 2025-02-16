@@ -9,7 +9,6 @@ export const getUserByUsername = async (username: string) => {
     SELECT
       u.id,
       u.username,
-      u.email,
       u.password,
       u.is_admin as isAdmin,
       u.status
@@ -33,21 +32,20 @@ export const createUserController = async (req: Request, res: Response) => {
   });
   try {
     const {
-      body: { id, username, email },
+      body: { id, username, password },
     } = req;
 
     childLogger.info("Creating user", {
       filename: "service.ts",
       func: "createUserController",
     });
-    const randomWord = getRandomWord(10);
-    const password = await encryptPassword(randomWord);
+    const hashedPassword = await encryptPassword(password);
 
     const sql = `
-      INSERT INTO users (id, username, email, password)
+      INSERT INTO users (id, username, password)
       VALUES (?, ?, ?, ?)
     `;
-    const values = [id, username, email, password];
+    const values = [id, username, hashedPassword];
     await executeQuery(sql, values, serverManagerPool);
 
     childLogger.info(`User ${username} created correctly`, {
@@ -62,7 +60,6 @@ export const createUserController = async (req: Request, res: Response) => {
       payload: {
         id,
         username,
-        email,
       },
     };
 
