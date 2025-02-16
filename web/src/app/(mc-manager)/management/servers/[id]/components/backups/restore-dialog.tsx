@@ -63,7 +63,7 @@ export default function RestoreDialog({ item }: RestoreDialogProps) {
         description: `The backup ${name} has been restored successfully`,
       });
       setOpen(false);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "An error occurred while restoring the backup",

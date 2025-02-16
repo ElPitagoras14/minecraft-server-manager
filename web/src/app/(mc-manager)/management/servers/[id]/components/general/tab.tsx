@@ -313,6 +313,7 @@ export default function GeneralTab() {
     );
     newInitialValues.version = version;
     propertyForm.reset(newInitialValues);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [properties, data]);
 
   useEffect(() => {
@@ -321,6 +322,7 @@ export default function GeneralTab() {
       ...data,
     };
     serverForm.reset(newInitialValues);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   useEffect(() => {
@@ -328,6 +330,7 @@ export default function GeneralTab() {
     (async () => {
       await loadData();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, id]);
 
   return (

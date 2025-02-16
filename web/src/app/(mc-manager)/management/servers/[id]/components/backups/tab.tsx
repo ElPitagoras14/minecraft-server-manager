@@ -42,7 +42,7 @@ const getData = async (
 
 export default function BackupsTab() {
   const { data: session } = useSession();
-  const { user: { token = "", username = "" } = {} } = session || {};
+  const { user: { token = "" } = {} } = session || {};
 
   const { toast } = useToast();
   const { showError } = useErrorDialog();
@@ -102,7 +102,7 @@ export default function BackupsTab() {
         const { original: item } = row;
         return (
           <div className="flex flex-row justify-center space-x-2">
-            <RestoreDialog item={item}/>
+            <RestoreDialog item={item} />
             <DeleteDialog updateData={loadData} item={item} />
           </div>
         );
@@ -115,6 +115,7 @@ export default function BackupsTab() {
     (async () => {
       await loadData();
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   return (

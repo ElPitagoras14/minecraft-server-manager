@@ -63,8 +63,7 @@ const getData = async (
 
 export default function OperatorsTab() {
   const { data: session } = useSession();
-  const { user: { token = "", id: userId = "", username = "" } = {} } =
-    session || {};
+  const { user: { token = "", id: userId = "" } = {} } = session || {};
 
   const { id } = useParams();
 
@@ -160,6 +159,7 @@ export default function OperatorsTab() {
         handleErrorResponse(error);
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   return (

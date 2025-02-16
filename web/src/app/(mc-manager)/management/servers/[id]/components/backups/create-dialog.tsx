@@ -50,23 +50,6 @@ interface CreateDialogProps {
   total: number;
 }
 
-const getData = async (serverId: string, token: string) => {
-  const dataOptions = {
-    method: "GET",
-    url: `${API_URL}/servers/${serverId}`,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-
-  const response = await axios.request(dataOptions);
-  const {
-    data: { payload },
-  } = response;
-
-  return payload;
-};
-
 export default function CreateDialog({ updateData, total }: CreateDialogProps) {
   const { data: session } = useSession();
   const { user: { token = "", username = "", id: userId = "" } = {} } =
@@ -76,7 +59,6 @@ export default function CreateDialog({ updateData, total }: CreateDialogProps) {
   const { id } = useParams();
   const { showError } = useErrorDialog();
 
-  const [data, setData] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 

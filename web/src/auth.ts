@@ -57,8 +57,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const { id, username, isAdmin } = decodedToken;
           const user = { id, name: username, isAdmin, token };
           return user;
-        } catch (error: any) {
-          console.error("error", error.response.data.message);
+        } catch (error: unknown) {
+          if (axios.isAxiosError(error)) {
+            const { response } = error;
+            if (response?.status === 401) {
+              return null;
+            }
+            console.error("error", response?.data.message);
+            return null;
+          }
           return null;
         }
       },
